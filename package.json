@@ -1,0 +1,14 @@
+{
+  "name": "site-crawler",
+  "version": "1.0.0",
+  "main": "crawler.js",
+  "author": "Sergey Drobov <serch.m@gmail.com>",
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "dotenv": "^4.0.0",
+    "feedparser": "^2.2.4",
+    "jsdom": "^11.5.1",
+    "mysql2": "^1.5.1"
+  }
+}
