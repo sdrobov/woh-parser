@@ -7,7 +7,6 @@ const feedparser = require('feedparser');
 const jsdom = require('jsdom');
 const {JSDOM} = jsdom;
 const sanitizeHTML = require('sanitize-html');
-const moment = require('moment');
 const Promise = require('bluebird');
 const rp = require('request-promise');
 const request = require('request');
@@ -32,7 +31,7 @@ function jsdomOptions (link) {
     referer: 'https://yandex.ru',
     contentType: 'text/html',
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.94 Safari/537.36',
-    includeNodeLocations: true,
+    includeNodeLocations: true
     // runScripts: 'dangerously',
     // pretendToBeVisual: true,
     // resources: 'usable'
@@ -50,7 +49,7 @@ function siteError (error, siteId) {
   // language=MySQL
   return mysqlConnection.executeAsync(
     'INSERT INTO site_errors (site_id, error, created_at) VALUES (?, ?, ?)',
-    [siteId, error, moment().format(env.MYSQL_DATETIME_FORMAT)]
+    [siteId, error, new Date()]
   );
 }
 
@@ -152,6 +151,7 @@ function parseRss (settings, siteId) {
         uri: link,
         transform: itemBody => {
           let options = jsdomOptions(link);
+
           return new JSDOM(itemBody, options);
         }
       }).then(dom => {
@@ -187,6 +187,7 @@ function parseDom (settings, siteId) {
     uri: settings.mainUrl,
     transform: body => {
       let options = jsdomOptions(settings.mainUrl);
+
       return new JSDOM(body, options);
     }
   }).then(dom => {
@@ -213,9 +214,9 @@ function parseDom (settings, siteId) {
       }
 
       articles.forEach(article => {
+        let currentDate = new Date(article.pubdate);
         if (settings.lastPostDate) {
-          let lastPostDate = moment(settings.lastPostDate);
-          let currentDate = moment(article.pubdate);
+          let lastPostDate = new Date(settings.lastPostDate);
 
           if (lastPostDate >= currentDate) {
             return;
@@ -226,6 +227,7 @@ function parseDom (settings, siteId) {
           uri: article.url,
           transform: articleBody => {
             let options = jsdomOptions(article.url);
+
             return new JSDOM(articleBody, options);
           }
         }).then(dom => {
@@ -233,6 +235,7 @@ function parseDom (settings, siteId) {
             ? dom.window.document.querySelector(settings.imageSelector) || null
             : null;
           let content = dom.window.document.querySelector(settings.contentSelector).innerHTML;
+
           return savePost({
             siteId: siteId,
             url: article.url,
@@ -241,7 +244,7 @@ function parseDom (settings, siteId) {
             description: article.description,
             imageInt: image,
             content: content,
-            pubdate: new Date(article.date)
+            pubdate: currentDate
           });
         }).catch(err => {
           siteError(err, siteId);
