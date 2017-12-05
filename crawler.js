@@ -3,13 +3,12 @@
 
 const dotenv = require('dotenv').config();
 const mysql = require('mysql2');
-const feedparser = require('feedparser');
+const feedparser = require('feedparser-promised');
 const jsdom = require('jsdom');
 const {JSDOM} = jsdom;
 const sanitizeHTML = require('sanitize-html');
 const Promise = require('bluebird');
-const rp = require('request-promise');
-const request = require('request');
+const request = require('request-promise');
 const moment = require('moment');
 Promise.promisifyAll(require('mysql2/lib/connection').prototype);
 
@@ -20,9 +19,6 @@ const mysqlConnection = mysql.createConnection({
   password: env.MYSQL_PASSWORD,
   database: env.MYSQL_DATABASE
 });
-
-let postsProcessed = 0;
-let sitesLocked = [];
 
 /**
  * returns config for jsdom
@@ -60,10 +56,6 @@ function siteError (error, siteId) {
  * @returns {*|Promise<T>}
  */
 function lockSite (siteId) {
-  if (sitesLocked.indexOf(siteId) < 0) {
-    sitesLocked.push(siteId);
-  }
-
   // language=MySQL
   return mysqlConnection.executeAsync('UPDATE sites SET Status = 1 WHERE ID = ?', [siteId]);
 }
@@ -74,12 +66,6 @@ function lockSite (siteId) {
  * @returns {*|Promise<T>}
  */
 function unlockSite (siteId) {
-  let idx = sitesLocked.indexOf(siteId);
-  if (idx < 0) {
-    return;
-  }
-
-  sitesLocked.splice(idx, 1);
   // language=MySQL
   return mysqlConnection.executeAsync('UPDATE sites SET Status = 0 WHERE ID = ?', [siteId]);
 }
@@ -141,7 +127,6 @@ function savePost (post) {
     ]
   ).then(res => {
     console.log(`saved: ${post.title} for site id = ${post.siteId}, post id = ${res.insertId}`, post.pubdate);
-    postsProcessed -= 1;
   }).catch(err => {
     siteError(err, post.siteId);
   });
@@ -155,66 +140,45 @@ function savePost (post) {
 function parseRss (settings, siteId) {
   console.log(`parsing rss-powered site id = ${siteId}`);
 
-  getLastPostDate(siteId).then(lastPostDate => {
-    let req = request(settings.rssUrl);
-    let feed = new feedparser({resume_saxerror: true});
+  let lastPostDate;
+  return getLastPostDate(siteId).then(lpd => {
+    lastPostDate = lpd;
 
-    req.on('error', err => {
-      throw err;
-    });
-    req.on('response', function (res) {
-      if (res.statusCode !== 200) {
-        throw `server response !== 200; url = ${settings.rssUrl}`;
+    return feedparser.parse(settings.rssUrl);
+  }).then(items => {
+    return Promise.all(items.map(item => {
+      let currentDate = new Date(item.pubdate);
+      let link = item.origlink || item.link;
+      let currentItem = item;
+
+      if (lastPostDate >= currentDate) {
+        return;
       }
 
-      let stream = this;
-      stream.pipe(feed);
-    });
+      return request({
+        uri: link,
+        transform: itemBody => {
+          let options = jsdomOptions(link);
 
-    feed.on('error', err => {
-      throw err;
-    });
-    feed.on('readable', function () {
-      let stream = this;
-      let item;
-
-      while (item = stream.read()) {
-        let currentDate = new Date(item.pubdate);
-        let link = item.origlink || item.link;
-        let currentItem = item;
-
-        if (lastPostDate >= currentDate) {
-          continue;
+          return new JSDOM(itemBody, options);
         }
+      }).then(dom => {
+        let content = dom.window.document.querySelector(settings.contentSelector).innerHTML;
 
-        rp({
-          uri: link,
-          transform: itemBody => {
-            let options = jsdomOptions(link);
-
-            return new JSDOM(itemBody, options);
-          }
-        }).then(dom => {
-          postsProcessed += 1;
-          let content = dom.window.document.querySelector(settings.contentSelector).innerHTML;
-
-          return savePost({
-            siteId: siteId,
-            url: link,
-            title: currentItem.title,
-            image: currentItem.image ? currentItem.image.url : null,
-            description: currentItem.summary || null,
-            imageInt: null,
-            content: content,
-            pubdate: currentDate
-          });
-        }).catch(err => {
-          siteError(err, siteId);
+        return savePost({
+          siteId: siteId,
+          url: link,
+          title: currentItem.title,
+          image: currentItem.image ? currentItem.image.url : null,
+          description: currentItem.summary || null,
+          imageInt: null,
+          content: content,
+          pubdate: currentDate
         });
-      }
-
-      unlockSite(siteId);
-    });
+      }).catch(err => {
+        siteError(err, siteId);
+      });
+    }));
   });
 }
 
@@ -227,10 +191,10 @@ function parseDom (settings, siteId) {
   console.log(`parsing css-powered site id = ${siteId}`);
 
   let lastPostDate;
-  getLastPostDate(siteId).then(lpd => {
+  return getLastPostDate(siteId).then(lpd => {
     lastPostDate = lpd;
 
-    return rp({
+    return request({
       uri: settings.mainUrl,
       transform: body => {
         let options = jsdomOptions(settings.mainUrl);
@@ -278,15 +242,13 @@ function parseDom (settings, siteId) {
       });
     }
 
-    postsProcessed += articles.length;
-
-    articles.forEach(article => {
+    return Promise.all(articles.map(article => {
       let currentDate = new Date(article.pubdate);
       if (lastPostDate >= currentDate) {
         return;
       }
 
-      rp({
+      return request({
         uri: article.url,
         transform: articleBody => {
           let options = jsdomOptions(article.url);
@@ -315,12 +277,7 @@ function parseDom (settings, siteId) {
       }).catch(err => {
         siteError(err, siteId);
       });
-    });
-
-    unlockSite(siteId);
-  }).catch(err => {
-    siteError(err, siteId);
-    unlockSite(siteId);
+    }));
   });
 }
 
@@ -331,37 +288,26 @@ mysqlConnection.executeAsync(
       throw 'empty result set';
     }
 
-    sites.forEach(site => {
-      lockSite(site['ID']).then(() => {
+    return Promise.all(sites.map(site => {
+      return lockSite(site['ID']).then(() => {
         const settings = JSON.parse(site['settings']);
         if (settings.rssUrl) {
-          try {
-            parseRss(settings, site['ID']);
-          } catch (err) {
-            siteError(err, site['ID']);
-            unlockSite(site['ID']);
-          }
+          return parseRss(settings, site['ID']);
         } else {
-          parseDom(settings, site['ID']);
+          return parseDom(settings, site['ID']);
         }
+      }).then(() => {
+        return unlockSite(site['ID']);
       }).catch(err => {
         siteError(err, site['ID']);
-        unlockSite(site['ID']);
+
+        return unlockSite(site['ID']);
       });
-    });
-
-    setInterval(() => {
-      if (postsProcessed <= 0) {
-        if (sitesLocked.length > 0) {
-          sitesLocked.forEach(siteId => {
-            unlockSite(siteId);
-          });
-        }
-
-        mysqlConnection.close();
-        process.exit();
-      }
-    }, 1000);
+    }));
+  })
+  .then(() => {
+    mysqlConnection.close();
+    process.exit();
   })
   .catch(err => {
     console.log(err);
