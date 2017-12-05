@@ -99,17 +99,17 @@ function getLastPostDate (siteId) {
  * @returns {*|Promise<T>}
  */
 function savePost (post) {
-  console.log(`saving: ${post.title} for site id = ${post.siteId}`);
-
-  let title = sanitizeHTML(post.title);
+  let title = sanitizeHTML(post.title).toString().trim();
   let content = sanitizeHTML(post.content, {
     allowedTags: ['b', 'i', 'em', 'strong', 'a', 'p', 'br', 'img'],
     allowedAttributes: {
       'a': ['href'],
       'img': ['src', 'alt', 'title']
     }
-  });
-  let description = sanitizeHTML(post.description);
+  }).toString().trim();
+  let description = sanitizeHTML(post.description).toString().trim();
+
+  console.log(`saving: ${title} for site id = ${post.siteId}`);
 
   // language=MySQL
   return mysqlConnection.queryAsync(
@@ -126,10 +126,50 @@ function savePost (post) {
       new Date()
     ]
   ).then(res => {
-    console.log(`saved: ${post.title} for site id = ${post.siteId}, post id = ${res.insertId}`, post.pubdate);
+    console.log(`saved: ${title} for site id = ${post.siteId}, post id = ${res.insertId}, post pubdate = ${post.pubdate}`);
   }).catch(err => {
     siteError(err, post.siteId);
   });
+}
+
+function parseArticles (articles, settings, siteId) {
+  return Promise.all(articles.map(article => {
+    if (!article) {
+      return Promise.resolve();
+    }
+
+    let currentDate = new Date(article.pubdate);
+
+    return request({
+      uri: article.url,
+      transform: articleBody => {
+        let options = jsdomOptions(article.url);
+
+        return new JSDOM(articleBody, options);
+      }
+    }).then(dom => {
+      let image = settings.imageSelector
+        ? dom.window.document.querySelector(settings.imageSelector) || ''
+        : '';
+      if (image) {
+        image = image.src;
+      }
+      let content = dom.window.document.querySelector(settings.contentSelector).innerHTML;
+
+      return savePost({
+        siteId: siteId,
+        url: article.url,
+        title: article.title,
+        image: article.preview,
+        description: article.description,
+        imageInt: image,
+        content: content,
+        pubdate: currentDate
+      });
+    }).catch(err => {
+      siteError(err, siteId);
+    });
+  }));
 }
 
 /**
@@ -146,39 +186,22 @@ function parseRss (settings, siteId) {
 
     return feedparser.parse(settings.rssUrl);
   }).then(items => {
-    return Promise.all(items.map(item => {
+    let articles = items.map(item => {
       let currentDate = new Date(item.pubdate);
-      let link = item.origlink || item.link;
-      let currentItem = item;
-
       if (lastPostDate >= currentDate) {
         return;
       }
 
-      return request({
-        uri: link,
-        transform: itemBody => {
-          let options = jsdomOptions(link);
+      return {
+        title: item.title,
+        url: item.origlink || item.link,
+        pubdate: item.pubdate,
+        preview: item.image ? item.image.url : '',
+        description: item.summary || null
+      };
+    });
 
-          return new JSDOM(itemBody, options);
-        }
-      }).then(dom => {
-        let content = dom.window.document.querySelector(settings.contentSelector).innerHTML;
-
-        return savePost({
-          siteId: siteId,
-          url: link,
-          title: currentItem.title,
-          image: currentItem.image ? currentItem.image.url : null,
-          description: currentItem.summary || null,
-          imageInt: null,
-          content: content,
-          pubdate: currentDate
-        });
-      }).catch(err => {
-        siteError(err, siteId);
-      });
-    }));
+    return parseArticles(articles, settings, siteId);
   });
 }
 
@@ -232,7 +255,13 @@ function parseDom (settings, siteId) {
     }
 
     let articles = [];
+    let skipped = false;
     for (let i = 0; i < titles.length; i++) {
+      if (new Date(dates[i]) <= lastPostDate) {
+        skipped = true;
+        continue;
+      }
+
       articles.push({
         title: titles[i].innerHTML,
         url: links[i],
@@ -242,42 +271,24 @@ function parseDom (settings, siteId) {
       });
     }
 
-    return Promise.all(articles.map(article => {
-      let currentDate = new Date(article.pubdate);
-      if (lastPostDate >= currentDate) {
-        return;
+    if (!skipped && settings.nextSelector) {
+      let newSettings = settings;
+      let nextUrl = dom.window.document.querySelector(settings.nextSelector);
+      if (nextUrl && nextUrl.href) {
+        newSettings.mainUrl = nextUrl.href;
+
+        return parseDom(newSettings, siteId)
+          .then(() => {
+            return parseArticles(articles, newSettings, siteId);
+          }).catch(err => {
+            siteError(err, siteId);
+
+            return parseArticles(articles, newSettings, siteId);
+          });
       }
+    }
 
-      return request({
-        uri: article.url,
-        transform: articleBody => {
-          let options = jsdomOptions(article.url);
-
-          return new JSDOM(articleBody, options);
-        }
-      }).then(dom => {
-        let image = settings.imageSelector
-          ? dom.window.document.querySelector(settings.imageSelector) || ''
-          : '';
-        if (image) {
-          image = image.src;
-        }
-        let content = dom.window.document.querySelector(settings.contentSelector).innerHTML;
-
-        return savePost({
-          siteId: siteId,
-          url: article.url,
-          title: article.title,
-          image: article.preview,
-          description: article.description,
-          imageInt: image,
-          content: content,
-          pubdate: currentDate
-        });
-      }).catch(err => {
-        siteError(err, siteId);
-      });
-    }));
+    return parseArticles(articles, settings, siteId);
   });
 }
 
