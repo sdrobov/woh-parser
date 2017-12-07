@@ -98,15 +98,25 @@ function getLastPostDate (siteId) {
  * @param post
  * @returns {*|Promise<T>}
  */
-function savePost (post) {
+function savePost (post, settings) {
   let title = sanitizeHTML(post.title).toString().trim();
-  let content = sanitizeHTML(post.content, {
-    allowedTags: ['b', 'i', 'em', 'strong', 'a', 'p', 'br', 'img'],
-    allowedAttributes: {
-      'a': ['href'],
-      'img': ['src', 'alt', 'title']
-    }
-  }).toString().trim();
+  let content = post.content.toString().trim();
+  if (settings.contentRegexps) {
+    settings.contentRegexps.for(regexp => {
+      let r = new RegExp(regexp.search);
+      if (r.test(content)) {
+        content = content.replace(r, regexp.replace);
+      }
+    });
+  } else {
+    content = sanitizeHTML(content, {
+      allowedTags: ['b', 'i', 'em', 'strong', 'a', 'p', 'br', 'img'],
+      allowedAttributes: {
+        'a': ['href'],
+        'img': ['src', 'alt', 'title']
+      }
+    }).toString().trim();
+  }
   let description = sanitizeHTML(post.description).toString().trim();
 
   console.log(`saving: ${title} for site id = ${post.siteId}`);
@@ -165,7 +175,7 @@ function parseArticles (articles, settings, siteId) {
         imageInt: image,
         content: content,
         pubdate: currentDate
-      });
+      }, settings);
     }).catch(err => {
       siteError(err, siteId);
     });
@@ -186,6 +196,10 @@ function parseRss (settings, siteId) {
 
     return feedparser.parse(settings.rssUrl);
   }).then(items => {
+    if (settings.limitMax && items.length > settings.limitMax) {
+      items = items.slice(0, settings.limitMax);
+    }
+
     let articles = items.map(item => {
       let currentDate = new Date(item.pubdate);
       if (lastPostDate >= currentDate) {
@@ -271,7 +285,25 @@ function parseDom (settings, siteId) {
       });
     }
 
+    if (settings.limitMax) {
+      if (articles.length > settings.limitMax) {
+        articles = articles.slice(0, settings.limitMax);
+
+        return parseArticles(articles, settings, siteId);
+      } else {
+        settings.limitMax -= articles.length;
+      }
+    }
+
     if (!skipped && settings.nextSelector) {
+      if (settings.pagesMax) {
+        settings.pagesMax -= 1;
+
+        if (settings.pagesMax === 0) {
+          return parseArticles(articles, settings, siteId);
+        }
+      }
+
       let newSettings = settings;
       let nextUrl = dom.window.document.querySelector(settings.nextSelector);
       if (nextUrl && nextUrl.href) {
@@ -279,11 +311,11 @@ function parseDom (settings, siteId) {
 
         return parseDom(newSettings, siteId)
           .then(() => {
-            return parseArticles(articles, newSettings, siteId);
+            return parseArticles(articles, settings, siteId);
           }).catch(err => {
             siteError(err, siteId);
 
-            return parseArticles(articles, newSettings, siteId);
+            return parseArticles(articles, settings, siteId);
           });
       }
     }
