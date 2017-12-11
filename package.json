@@ -10,7 +10,7 @@
     "bluebird": "^3.5.1",
     "dotenv": "^4.0.0",
     "feedparser": "^2.2.4",
-    "feedparser-promised": "^1.4.2",
+    "feedparser-promised": "https://github.com/sdrobov/feedparser-promised.git",
     "jsdom": "^11.5.1",
     "moment": "^2.19.3",
     "mysql2": "^1.5.1",

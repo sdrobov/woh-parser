@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-const dotenv = require('dotenv').config();
+require('dotenv').config();
 const mysql = require('mysql2');
 const feedparser = require('feedparser-promised');
 const jsdom = require('jsdom');
@@ -101,22 +101,13 @@ function getLastPostDate (siteId) {
 function savePost (post, settings) {
   let title = sanitizeHTML(post.title).toString().trim();
   let content = post.content.toString().trim();
-  if (settings.contentRegexps) {
-    settings.contentRegexps.for(regexp => {
-      let r = new RegExp(regexp.search);
-      if (r.test(content)) {
-        content = content.replace(r, regexp.replace);
-      }
-    });
-  } else {
-    content = sanitizeHTML(content, {
-      allowedTags: ['b', 'i', 'em', 'strong', 'a', 'p', 'br', 'img'],
-      allowedAttributes: {
-        'a': ['href'],
-        'img': ['src', 'alt', 'title']
-      }
-    }).toString().trim();
-  }
+  let contentRegexps = settings.contentRegexps || JSON.parse(env.GLOBAL_CONTENT_REGEXP);
+  contentRegexps.forEach(regexp => {
+    let r = new RegExp(regexp.search);
+    if (r.test(content)) {
+      content = content.replace(r, regexp.replace);
+    }
+  });
   let description = sanitizeHTML(post.description).toString().trim();
 
   console.log(`saving: ${title} for site id = ${post.siteId}`);
@@ -142,6 +133,54 @@ function savePost (post, settings) {
   });
 }
 
+function getPage (url, settings, contentAdd, firstImage) {
+  return request({
+    uri: url,
+    transform: articleBody => {
+      let options = jsdomOptions(url);
+
+      return new JSDOM(articleBody, options);
+    }
+  }).then(dom => {
+    let image;
+    if (!firstImage) {
+      image = settings.imageSelector
+        ? dom.window.document.querySelector(settings.imageSelector) || ''
+        : '';
+      if (image) {
+        image = image.src;
+      }
+    } else {
+      image = firstImage;
+    }
+
+    let content = dom.window.document.querySelector(settings.contentSelector);
+    if (content) {
+      content = content.innerHTML;
+
+      if (contentAdd) {
+        content = contentAdd + content;
+      }
+
+      if (settings.nextContentSelector) {
+        let nextPage = dom.window.document.querySelector(settings.nextContentSelector);
+        if (nextPage) {
+          let nextPageUrl = nextPage.href;
+          return getPage(nextPageUrl, settings, content, image);
+        }
+      }
+    } else if (contentAdd) {
+      content = contentAdd;
+    }
+
+    if (!content) {
+      return Promise.reject(new Error(`no content found at url: ${url}`));
+    }
+
+    return Promise.resolve({content: content, image: image});
+  });
+}
+
 function parseArticles (articles, settings, siteId) {
   return Promise.all(articles.map(article => {
     if (!article) {
@@ -150,30 +189,15 @@ function parseArticles (articles, settings, siteId) {
 
     let currentDate = new Date(article.pubdate);
 
-    return request({
-      uri: article.url,
-      transform: articleBody => {
-        let options = jsdomOptions(article.url);
-
-        return new JSDOM(articleBody, options);
-      }
-    }).then(dom => {
-      let image = settings.imageSelector
-        ? dom.window.document.querySelector(settings.imageSelector) || ''
-        : '';
-      if (image) {
-        image = image.src;
-      }
-      let content = dom.window.document.querySelector(settings.contentSelector).innerHTML;
-
+    return getPage(article.url, settings).then(contentAndImage => {
       return savePost({
         siteId: siteId,
         url: article.url,
         title: article.title,
         image: article.preview,
         description: article.description,
-        imageInt: image,
-        content: content,
+        imageInt: contentAndImage.image,
+        content: contentAndImage.content,
         pubdate: currentDate
       }, settings);
     }).catch(err => {
@@ -194,13 +218,11 @@ function parseRss (settings, siteId) {
   return getLastPostDate(siteId).then(lpd => {
     lastPostDate = lpd;
 
-    return feedparser.parse(settings.rssUrl);
+    return feedparser.parse({ uri: settings.rssUrl }, { resume_saxerror: true });
   }).then(items => {
-    if (settings.limitMax && items.length > settings.limitMax) {
-      items = items.slice(0, settings.limitMax);
-    }
+    let maxItems = settings.limitMax || items.length;
 
-    let articles = items.map(item => {
+    let articles = items.slice(0, maxItems).map(item => {
       let currentDate = new Date(item.pubdate);
       if (lastPostDate >= currentDate) {
         return;
