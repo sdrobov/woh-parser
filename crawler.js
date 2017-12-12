@@ -8,7 +8,6 @@ const jsdom = require('jsdom');
 const {JSDOM} = jsdom;
 const sanitizeHTML = require('sanitize-html');
 const Promise = require('bluebird');
-const request = require('request-promise');
 const moment = require('moment');
 Promise.promisifyAll(require('mysql2/lib/connection').prototype);
 
@@ -19,21 +18,6 @@ const mysqlConnection = mysql.createConnection({
   password: env.MYSQL_PASSWORD,
   database: env.MYSQL_DATABASE
 });
-
-/**
- * returns config for jsdom
- * @param link
- * @returns {{url: *, referer: string, contentType: string, userAgent: string, includeNodeLocations: boolean, runScripts: string, pretendToBeVisual: boolean, resources: string}}
- */
-function jsdomOptions (link) {
-  return {
-    url: link,
-    referer: 'https://yandex.ru',
-    contentType: 'text/html',
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.94 Safari/537.36',
-    includeNodeLocations: true
-  };
-}
 
 /**
  * write errors to mysql
@@ -134,13 +118,9 @@ function savePost (post, settings) {
 }
 
 function getPage (url, settings, contentAdd, firstImage) {
-  return request({
-    uri: url,
-    transform: articleBody => {
-      let options = jsdomOptions(url);
-
-      return new JSDOM(articleBody, options);
-    }
+  return JSDOM.fromURL(url, {
+    referer: 'https://yandex.ru',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.94 Safari/537.36'
   }).then(dom => {
     let image;
     if (!firstImage) {
@@ -218,7 +198,7 @@ function parseRss (settings, siteId) {
   return getLastPostDate(siteId).then(lpd => {
     lastPostDate = lpd;
 
-    return feedparser.parse({ uri: settings.rssUrl }, { resume_saxerror: true });
+    return feedparser.parse(settings.rssUrl);
   }).then(items => {
     let maxItems = settings.limitMax || items.length;
 
@@ -253,13 +233,9 @@ function parseDom (settings, siteId) {
   return getLastPostDate(siteId).then(lpd => {
     lastPostDate = lpd;
 
-    return request({
-      uri: settings.mainUrl,
-      transform: body => {
-        let options = jsdomOptions(settings.mainUrl);
-
-        return new JSDOM(body, options);
-      }
+    return JSDOM.fromURL(settings.mainUrl, {
+      referer: 'https://yandex.ru',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.94 Safari/537.36'
     });
   }).then(dom => {
     let titles = dom.window.document.querySelectorAll(settings.titlesSelector) || [];
