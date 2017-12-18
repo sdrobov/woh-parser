@@ -41,7 +41,7 @@ function siteError (error, siteId) {
  */
 function lockSite (siteId) {
   // language=MySQL
-  return mysqlConnection.executeAsync('UPDATE sites SET Status = 1 WHERE ID = ?', [siteId]);
+  return mysqlConnection.executeAsync('UPDATE sites SET Status = 0 WHERE ID = ?', [siteId]);
 }
 
 /**
@@ -51,7 +51,7 @@ function lockSite (siteId) {
  */
 function unlockSite (siteId) {
   // language=MySQL
-  return mysqlConnection.executeAsync('UPDATE sites SET Status = 0 WHERE ID = ?', [siteId]);
+  return mysqlConnection.executeAsync('UPDATE sites SET Status = 1 WHERE ID = ?', [siteId]);
 }
 
 /**
@@ -324,7 +324,7 @@ function parseDom (settings, siteId) {
 }
 
 mysqlConnection.executeAsync(
-  'SELECT sites.*, site_settings.settings FROM sites JOIN site_settings ON sites.ID = site_settings.site_id WHERE Status = 0')
+  'SELECT sites.*, site_settings.settings FROM sites JOIN site_settings ON sites.ID = site_settings.site_id WHERE Status = 1')
   .then(sites => {
     if (!sites || !sites[0]) {
       throw 'empty result set';
