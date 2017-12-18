@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 'use strict';
 
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({path: path.resolve(__dirname, '.env')});
 const mysql = require('mysql2');
 const feedparser = require('feedparser-promised');
 const jsdom = require('jsdom');
