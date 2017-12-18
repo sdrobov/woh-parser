@@ -83,8 +83,9 @@ function getLastPostDate (siteId) {
  * @returns {*|Promise<T>}
  */
 function savePost (post, settings) {
-  let title = sanitizeHTML(post.title).toString().trim();
-  let content = post.content.toString().trim();
+  let title = sanitizeHTML(post.title, { allowedTags: false, allowedAttributes: false }).toString().trim();
+  let tagsWhitelist = settings.tagsWhitelist || env.TAGS_WHITELIST;
+  let content = sanitizeHTML(post.content, tagsWhitelist).toString().trim();
   let contentRegexps = settings.contentRegexps || JSON.parse(env.GLOBAL_CONTENT_REGEXP);
   contentRegexps.forEach(regexp => {
     let r = new RegExp(regexp.search);
@@ -92,7 +93,7 @@ function savePost (post, settings) {
       content = content.replace(r, regexp.replace);
     }
   });
-  let description = sanitizeHTML(post.description).toString().trim();
+  let description = sanitizeHTML(post.description, { allowedTags: false, allowedAttributes: false }).toString().trim();
 
   console.log(`saving: ${title} for site id = ${post.siteId}`);
 
