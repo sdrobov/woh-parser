@@ -9,6 +9,7 @@
     "bluebird": "^3.5.1",
     "dotenv": "^4.0.0",
     "feedparser-promised": "git+https://github.com/sdrobov/feedparser-promised.git",
+    "js-beautify": "^1.7.5",
     "jsdom": "^11.5.1",
     "moment": "^2.19.4",
     "mysql2": "^1.5.1",
