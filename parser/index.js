@@ -237,14 +237,24 @@ class SiteParser {
       .replace(/\s\s+/g, ' ')
       .trim();
 
-    let content = sanitizeHTML(post.content, this.tagsWhitelist).toString().trim();
+    let content = sanitizeHTML(post.content, this.tagsWhitelist)
+      .toString()
+      .replace(/<[^/>][^>]*><\/[^>]+>/gm, '')
+      .trim();
     this.contentRegexps.forEach(regexp => {
       let r = new RegExp(regexp.search);
       if (r.test(content)) {
         content = content.replace(r, regexp.replace);
       }
     });
-    content = beautify(content);
+    content = beautify(content, {
+      preserve_newlines: false,
+      max_preserve_newlines: 1,
+      unescape_strings: true,
+      html: {
+        wrap_line_length: 0
+      }
+    });
 
     let description = sanitizeHTML(post.description, { allowedTags: [], allowedAttributes: [], allowedClasses: [] })
       .toString()
