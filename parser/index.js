@@ -239,7 +239,7 @@ class SiteParser {
 
     let content = sanitizeHTML(post.content, this.tagsWhitelist)
       .toString()
-      .replace(/<[^/>][^>]*><\/[^>]+>/gm, '')
+      .replace(/<[^/>]*>\s*<\/[^>]+>/gm, '')
       .trim();
     this.contentRegexps.forEach(regexp => {
       let r = new RegExp(regexp.search);
