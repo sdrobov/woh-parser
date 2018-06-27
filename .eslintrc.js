@@ -1,5 +1,5 @@
 module.exports = {
-    "extends": "standard",
+    "extends": "airbnb",
     "parserOptions": {
         "env": {"es6": true}
     }
