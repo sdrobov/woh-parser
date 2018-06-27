@@ -8,11 +8,23 @@
   "dependencies": {
     "bluebird": "^3.5.1",
     "dotenv": "^4.0.0",
+    "eslint": "^5.0.1",
+    "eslint-config-standart": "^0.2.0",
+    "eslint-plugin-promise": "^3.8.0",
+    "eslint-plugin-standard": "^3.1.0",
     "feedparser-promised": "git+https://github.com/sdrobov/feedparser-promised.git",
     "js-beautify": "^1.7.5",
     "jsdom": "^11.5.1",
     "moment": "^2.19.4",
     "mysql2": "^1.5.1",
+    "pre-commit": "^1.2.2",
     "sanitize-html": "^1.16.3"
-  }
+  },
+  "scripts": {
+    "start": "node crawler",
+    "lint": "node node_modules/.bin/eslint *.js . --ignore-path .eslintrc.js --fix"
+  },
+  "pre-commit": [
+    "lint"
+  ]
 }
