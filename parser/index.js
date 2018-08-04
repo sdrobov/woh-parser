@@ -298,17 +298,14 @@ class SiteParser {
     // language=MySQL
     return this.mysqlConnection
       .queryAsync(
-        'INSERT INTO posts (website_id, post_URL, post_name, post_image, post_description, post_image_internal, post_content, `datetime`, lastcheck) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO post (source_id, source, title, announce, `text`, created_at) VALUES (?, ?, ?, ?, ?, ?)',
         [
           this.siteId,
           post.url,
           title,
-          post.preview || '',
           description,
-          post.image || '',
           content,
           post.pubdate,
-          new Date(),
         ],
       )
       .then((res) => {
@@ -325,11 +322,6 @@ class SiteParser {
 
   siteError(error) {
     console.log(error, `site id = ${this.siteId}`);
-    // language=MySQL
-    return this.mysqlConnection.executeAsync(
-      'INSERT INTO site_errors (site_id, error, created_at) VALUES (?, ?, ?)',
-      [this.siteId, error, new Date()],
-    );
   }
 }
 

@@ -22,7 +22,10 @@ const mysqlConnection = mysql.createConnection({
  */
 function lockSite(siteId) {
   // language=MySQL
-  return mysqlConnection.executeAsync('UPDATE sites SET Status = 0 WHERE ID = ?', [siteId]);
+  return mysqlConnection.executeAsync(
+    'UPDATE source SET is_locked = 1 WHERE id = ?',
+    [siteId],
+  );
 }
 
 /**
@@ -32,7 +35,10 @@ function lockSite(siteId) {
  */
 function unlockSite(siteId) {
   // language=MySQL
-  return mysqlConnection.executeAsync('UPDATE sites SET Status = 1 WHERE ID = ?', [siteId]);
+  return mysqlConnection.executeAsync(
+    'UPDATE source SET is_locked = 0 WHERE id = ?',
+    [siteId],
+  );
 }
 
 /**
@@ -43,14 +49,11 @@ function unlockSite(siteId) {
 function getLastPostDate(siteId) {
   // language=MySQL
   return mysqlConnection
-    .executeAsync(
-      'SELECT * FROM posts WHERE website_id = ? AND datetime IS NOT NULL ORDER BY datetime DESC LIMIT 1',
-      [siteId],
-    )
-    .then((post) => {
-      if (post && post[0]) {
+    .executeAsync('SELECT * FROM source WHERE id = ?', [siteId])
+    .then((source) => {
+      if (source && source[0]) {
         return new Promise((resolve) => {
-          resolve(new Date(post[0].datetime));
+          resolve(new Date(source[0].last_post_date || 0));
         });
       }
 
@@ -60,26 +63,45 @@ function getLastPostDate(siteId) {
     });
 }
 
+function updateLastPostDate(siteId) {
+  return mysqlConnection
+    .executeAsync(
+      'SELECT * FROM post WHERE source_id = ? ORDER BY created_at DESC LIMIT 1',
+      [siteId],
+    )
+    .then((lastPost) => {
+      if (!lastPost || !lastPost[0]) {
+        return Promise.resolve();
+      }
+
+      return Promise.resolve(new Date(lastPost[0].created_at || 0));
+    });
+}
+
 mysqlConnection
-  .executeAsync(
-    'SELECT sites.*, site_settings.settings FROM sites JOIN site_settings ON sites.ID = site_settings.site_id WHERE Status = 1',
-  )
-  .then((sites) => {
-    if (!sites || !sites[0]) {
+  .executeAsync('SELECT * FROM source WHERE is_locked = 0')
+  .then((sources) => {
+    if (!sources || !sources[0]) {
       throw new Error('empty result set');
     }
 
     return Promise.all(
-      sites.map(site => lockSite(site.ID)
-        .then(() => getLastPostDate(site.ID))
+      sources.map(source => lockSite(source.id)
+        .then(() => getLastPostDate(source.id))
         .then((lastPostDate) => {
-          const settings = JSON.parse(site.settings);
-          const parser = new Parser(site.ID, settings, mysqlConnection, lastPostDate);
+          const settings = JSON.parse(source.settings);
+          const parser = new Parser(
+            source.id,
+            settings,
+            mysqlConnection,
+            lastPostDate,
+          );
 
           return parser.parse();
         })
-        .then(() => unlockSite(site.ID))
-        .catch(() => unlockSite(site.ID))),
+        .then(() => updateLastPostDate(source.id))
+        .then(() => unlockSite(source.id))
+        .catch(() => unlockSite(source.id))),
     );
   })
   .then(() => {
