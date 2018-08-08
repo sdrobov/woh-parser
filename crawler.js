@@ -75,7 +75,7 @@ function updateLastPostDate(siteId) {
       }
 
       return Promise.resolve(new Date(lastPost[0].created_at || 0));
-    });
+    }).then(lastPostDate => mysqlConnection.executeAsync('UPDATE source SET last_post_date = ? WHERE id = ?', [lastPostDate, siteId]));
 }
 
 mysqlConnection
@@ -101,7 +101,11 @@ mysqlConnection
         })
         .then(() => updateLastPostDate(source.id))
         .then(() => unlockSite(source.id))
-        .catch(() => unlockSite(source.id))),
+        .catch((err) => {
+          unlockSite(source.id);
+
+          throw err;
+        })),
     );
   })
   .then(() => {

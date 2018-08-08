@@ -33,28 +33,18 @@ class SiteParser {
 
       const articles = items
         .slice(0, maxItems)
-        .filter(item => new Date(item.pubdate) <= this.lastPostDate)
-        .map((item) => {
-          let preview = item.image;
-          if (!preview || !preview.url) {
-            if (item.enclosures && Array.isArray(item.enclosures)) {
-              item.enclosures.some((enclosure) => {
-                if (enclosure.url && /jpe?g|gif|png|svg/.test(enclosure.url)) {
-                  preview = enclosure;
-
-                  return true;
-                }
-
-                return false;
-              });
-            }
+        .filter((item) => {
+          if (this.lastPostDate === null) {
+            return true;
           }
 
+          return new Date(item.pubdate) <= this.lastPostDate;
+        })
+        .map((item) => {
           const article = {
             title: item.title,
             url: item.origlink || item.link,
             pubdate: item.pubdate,
-            preview: preview.url || '',
             description: item.summary || null,
           };
 
@@ -97,23 +87,13 @@ class SiteParser {
         dom.window.document.querySelectorAll(this.settings.linksSelector) || [],
         link => link.href,
       );
-      const previews = [].map.call(
-        this.settings.previewSelector
-          ? dom.window.document.querySelectorAll(this.settings.previewSelector) || []
-          : [],
-        preview => preview.src,
-      );
       const descriptions = this.settings.descriptionSelector
         ? dom.window.document.querySelectorAll(this.settings.descriptionSelector) || []
         : [];
 
-      if (
-        titles.length !== dates.length
-        || titles.length !== links.length
-        || dates.length !== links.length
-      ) {
+      if (titles.length !== links.length) {
         throw new Error(
-          `titles (${titles.length}), dates (${dates.length}) and links (${
+          `titles (${titles.length}) and links (${
             links.length
           }) doesnt match`,
         );
@@ -131,7 +111,6 @@ class SiteParser {
           title: title.innerHTML,
           url: links[index],
           pubdate: dates[index],
-          preview: previews[index] || '',
           description: descriptions[index] ? descriptions[index].innerHTML : '',
         });
       });
@@ -180,13 +159,11 @@ class SiteParser {
         const currentDate = new Date(article.pubdate);
 
         return this.getPage(article.url)
-          .then(contentAndImage => this.savePost({
+          .then(content => this.savePost({
             url: article.url,
             title: article.title,
-            preview: contentAndImage.preview || article.preview,
             description: article.description,
-            image: contentAndImage.image,
-            content: contentAndImage.content,
+            content,
             pubdate: currentDate,
           }))
           .catch((err) => {
@@ -196,32 +173,12 @@ class SiteParser {
     );
   }
 
-  getPage(url, contentAdd, firstImage) {
+  getPage(url, contentAdd) {
     return JSDOM.fromURL(url, {
       referer: 'https://yandex.ru',
       userAgent:
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.94 Safari/537.36',
     }).then((dom) => {
-      let image;
-      if (!firstImage) {
-        image = this.settings.imageSelector
-          ? dom.window.document.querySelector(this.settings.imageSelector) || ''
-          : '';
-        if (image) {
-          image = image.src;
-        }
-      } else {
-        image = firstImage;
-      }
-
-      let preview;
-      if (this.settings.previewFromMeta) {
-        preview = dom.window.document.querySelector('meta[property="og:image"]');
-        if (preview) {
-          preview = preview.content;
-        }
-      }
-
       let content = dom.window.document.querySelector(this.settings.contentSelector);
       if (content) {
         content = content.innerHTML;
@@ -234,7 +191,7 @@ class SiteParser {
           const nextPage = dom.window.document.querySelector(this.settings.nextContentSelector);
           if (nextPage) {
             const nextPageUrl = nextPage.href;
-            return this.getPage(nextPageUrl, content, image);
+            return this.getPage(nextPageUrl, content);
           }
         }
       } else if (contentAdd) {
@@ -245,11 +202,7 @@ class SiteParser {
         return Promise.reject(new Error(`no content found at url: ${url}`));
       }
 
-      return Promise.resolve({
-        content,
-        image,
-        preview,
-      });
+      return Promise.resolve(content);
     });
   }
 
