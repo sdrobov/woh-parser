@@ -38,7 +38,7 @@ class SiteParser {
             return true;
           }
 
-          return new Date(item.pubdate) <= this.lastPostDate;
+          return new Date(item.pubdate) >= this.lastPostDate;
         })
         .map((item) => {
           const article = {

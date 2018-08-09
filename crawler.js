@@ -50,32 +50,19 @@ function getLastPostDate(siteId) {
   // language=MySQL
   return mysqlConnection
     .executeAsync('SELECT * FROM source WHERE id = ?', [siteId])
-    .then((source) => {
-      if (source && source[0]) {
-        return new Promise((resolve) => {
-          resolve(new Date(source[0].last_post_date || 0));
-        });
-      }
-
-      return new Promise((resolve) => {
-        resolve(new Date(0));
-      });
-    });
+    .then(source => (source && source[0]
+      ? Promise.resolve(new Date(source[0].last_post_date || 0))
+      : Promise.resolve(new Date(0))
+    ));
 }
 
 function updateLastPostDate(siteId) {
-  return mysqlConnection
-    .executeAsync(
-      'SELECT * FROM post WHERE source_id = ? ORDER BY created_at DESC LIMIT 1',
-      [siteId],
-    )
-    .then((lastPost) => {
-      if (!lastPost || !lastPost[0]) {
-        return Promise.resolve();
-      }
-
-      return Promise.resolve(new Date(lastPost[0].created_at || 0));
-    }).then(lastPostDate => mysqlConnection.executeAsync('UPDATE source SET last_post_date = ? WHERE id = ?', [lastPostDate, siteId]));
+  return getLastPostDate(siteId).then((lastPostDate) => {
+    mysqlConnection.executeAsync(
+      'UPDATE source SET last_post_date = ? WHERE id = ?',
+      [lastPostDate, siteId],
+    );
+  });
 }
 
 mysqlConnection
