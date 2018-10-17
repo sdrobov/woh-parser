@@ -1,12 +1,10 @@
 #!/usr/bin/env node
 
-const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, '.env') });
-const mysql = require('mysql2');
-const Promise = require('bluebird');
+const dotenv = require('dotenv');
+const mysql = require('mysql2/promise');
 const Parser = require('./parser');
-Promise.promisifyAll(require('mysql2/lib/connection').prototype);
 
+dotenv.config();
 const { env } = process;
 const mysqlConnection = mysql.createConnection({
   host: env.MYSQL_HOST,
@@ -17,56 +15,46 @@ const mysqlConnection = mysql.createConnection({
 
 /**
  * lock site for processing
- * @param siteId
- * @returns {*|Promise<T>}
+ * @param {number} siteId
+ * @returns {Promise<Array>}
  */
 function lockSite(siteId) {
-  // language=MySQL
-  return mysqlConnection.executeAsync(
-    'UPDATE source SET is_locked = 1 WHERE id = ?',
-    [siteId],
-  );
+  return mysqlConnection.execute('UPDATE source SET is_locked = 1 WHERE id = ?', [siteId]);
 }
 
 /**
  * unlock site for processing
- * @param siteId
- * @returns {*|Promise<T>}
+ * @param {number} siteId
+ * @returns {Promise<Array>}
  */
 function unlockSite(siteId) {
-  // language=MySQL
-  return mysqlConnection.executeAsync(
-    'UPDATE source SET is_locked = 0 WHERE id = ?',
-    [siteId],
-  );
+  return mysqlConnection.execute('UPDATE source SET is_locked = 0 WHERE id = ?', [siteId]);
 }
 
 /**
- * fetches last post date
- * @param siteId
- * @returns {*|PromiseLike<T>|Promise<T>}
+ * @param {number} siteId
+ * @returns {Promise<Date>}
  */
-function getLastPostDate(siteId) {
-  // language=MySQL
-  return mysqlConnection
-    .executeAsync('SELECT * FROM source WHERE id = ?', [siteId])
-    .then(source => (source && source[0]
-      ? Promise.resolve(new Date(source[0].last_post_date || 0))
-      : Promise.resolve(new Date(0))
-    ));
+async function getLastPostDate(siteId) {
+  const [[source]] = await mysqlConnection.execute('SELECT * FROM source WHERE id = ?', [siteId]);
+  return (source
+    ? Promise.resolve(new Date(source.last_post_date || 0))
+    : Promise.resolve(new Date(0)));
 }
 
-function updateLastPostDate(siteId) {
-  return getLastPostDate(siteId).then((lastPostDate) => {
-    mysqlConnection.executeAsync(
-      'UPDATE source SET last_post_date = ? WHERE id = ?',
-      [lastPostDate, siteId],
-    );
-  });
+/**
+ * @param {number} siteId
+ */
+async function updateLastPostDate(siteId) {
+  const lastPostDate = await getLastPostDate(siteId);
+  mysqlConnection.execute('UPDATE source SET last_post_date = ? WHERE id = ?', [
+    lastPostDate,
+    siteId,
+  ]);
 }
 
 mysqlConnection
-  .executeAsync('SELECT * FROM source WHERE is_locked = 0')
+  .execute('SELECT * FROM source WHERE is_locked = 0')
   .then((sources) => {
     if (!sources || !sources[0]) {
       throw new Error('empty result set');
@@ -77,12 +65,7 @@ mysqlConnection
         .then(() => getLastPostDate(source.id))
         .then((lastPostDate) => {
           const settings = JSON.parse(source.settings);
-          const parser = new Parser(
-            source.id,
-            settings,
-            mysqlConnection,
-            lastPostDate,
-          );
+          const parser = new Parser(source.id, settings, mysqlConnection, lastPostDate);
 
           return parser.parse();
         })
