@@ -1,28 +1,21 @@
 #!/usr/bin/env node
 
 const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, '.env') });
-const mysql = require('mysql2');
-const Promise = require('bluebird');
+const { config: dotenv } = require('dotenv');
+const { createConnection: mysql } = require('mysql2/promise');
 const Parser = require('./parser');
-Promise.promisifyAll(require('mysql2/lib/connection').prototype);
 
+dotenv({ path: path.resolve(__dirname, '.env') });
 const { env } = process;
-const mysqlConnection = mysql.createConnection({
-  host: env.MYSQL_HOST,
-  user: env.MYSQL_USER,
-  password: env.MYSQL_PASSWORD,
-  database: env.MYSQL_DATABASE,
-});
+let mysqlConnection = null;
 
 /**
  * lock site for processing
  * @param siteId
  * @returns {*|Promise<T>}
  */
-function lockSite(siteId) {
-  // language=MySQL
-  return mysqlConnection.executeAsync(
+async function lockSite(siteId) {
+  return mysqlConnection.execute(
     'UPDATE source SET is_locked = 1 WHERE id = ?',
     [siteId],
   );
@@ -33,9 +26,8 @@ function lockSite(siteId) {
  * @param siteId
  * @returns {*|Promise<T>}
  */
-function unlockSite(siteId) {
-  // language=MySQL
-  return mysqlConnection.executeAsync(
+async function unlockSite(siteId) {
+  return mysqlConnection.execute(
     'UPDATE source SET is_locked = 0 WHERE id = ?',
     [siteId],
   );
@@ -46,60 +38,62 @@ function unlockSite(siteId) {
  * @param siteId
  * @returns {*|PromiseLike<T>|Promise<T>}
  */
-function getLastPostDate(siteId) {
-  // language=MySQL
-  return mysqlConnection
-    .executeAsync('SELECT * FROM source WHERE id = ?', [siteId])
-    .then(source => (source && source[0]
-      ? Promise.resolve(new Date(source[0].last_post_date || 0))
-      : Promise.resolve(new Date(0))
-    ));
+async function getLastPostDate(siteId) {
+  const [source] = await mysqlConnection.execute(
+    'SELECT * FROM source WHERE id = ?',
+    [siteId],
+  );
+  const lastPostDate = (source ? (source.last_post_date || 0) : 0);
+
+  return new Date(lastPostDate);
 }
 
-function updateLastPostDate(siteId) {
-  return getLastPostDate(siteId).then((lastPostDate) => {
-    mysqlConnection.executeAsync(
-      'UPDATE source SET last_post_date = ? WHERE id = ?',
-      [lastPostDate, siteId],
-    );
-  });
+async function updateLastPostDate(siteId) {
+  const lastPostDate = await getLastPostDate(siteId);
+
+  return mysqlConnection.execute(
+    'UPDATE source SET last_post_date = ? WHERE id = ?',
+    [lastPostDate, siteId],
+  );
 }
 
-mysqlConnection
-  .executeAsync('SELECT * FROM source WHERE is_locked = 0')
-  .then((sources) => {
-    if (!sources || !sources[0]) {
-      throw new Error('empty result set');
-    }
-
-    return Promise.all(
-      sources.map(source => lockSite(source.id)
-        .then(() => getLastPostDate(source.id))
-        .then((lastPostDate) => {
-          const settings = JSON.parse(source.settings);
-          const parser = new Parser(
-            source.id,
-            settings,
-            mysqlConnection,
-            lastPostDate,
-          );
-
-          return parser.parse();
-        })
-        .then(() => updateLastPostDate(source.id))
-        .then(() => unlockSite(source.id))
-        .catch((err) => {
-          unlockSite(source.id);
-
-          throw err;
-        })),
-    );
-  })
-  .then(() => {
-    mysqlConnection.close();
-    process.exit();
-  })
-  .catch((err) => {
-    console.log(err);
-    process.exit(1);
+async function main() {
+  mysqlConnection = await mysql({
+    host: env.MYSQL_HOST,
+    user: env.MYSQL_USER,
+    password: env.MYSQL_PASSWORD,
+    database: env.MYSQL_DATABASE,
   });
+  const sources = await mysqlConnection.execute('SELECT * FROM source WHERE is_locked = 0');
+  if (!sources || !sources[0]) {
+    throw new Error('empty result set');
+  }
+
+  return Promise.all(
+    sources.map(source => lockSite(source.id)
+      .then(() => getLastPostDate(source.id))
+      .then((lastPostDate) => {
+        const settings = JSON.parse(source.settings);
+        const parser = new Parser(
+          source.id,
+          settings,
+          mysqlConnection,
+          lastPostDate,
+        );
+
+        return parser.parse();
+      })
+      .then(() => updateLastPostDate(source.id))
+      .then(() => unlockSite(source.id))
+      .catch((err) => {
+        unlockSite(source.id);
+
+        throw err;
+      })),
+  ).then(() => mysqlConnection.close());
+}
+
+main().catch((err) => {
+  console.log(err);
+  process.exit(1);
+});

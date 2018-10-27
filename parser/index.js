@@ -1,10 +1,8 @@
 const feedparser = require('feedparser-promised');
 const moment = require('moment');
-const jsdom = require('jsdom');
-
-const { JSDOM } = jsdom;
+const { JSDOM } = require('jsdom');
 const sanitizeHTML = require('sanitize-html');
-const beautify = require('js-beautify').html;
+const { html: beautify } = require('js-beautify');
 
 const { env } = process;
 
@@ -92,11 +90,7 @@ class SiteParser {
         : [];
 
       if (titles.length !== links.length) {
-        throw new Error(
-          `titles (${titles.length}) and links (${
-            links.length
-          }) doesnt match`,
-        );
+        throw new Error(`titles (${titles.length}) and links (${links.length}) doesnt match`);
       }
 
       let articles = [];
@@ -250,16 +244,9 @@ class SiteParser {
 
     // language=MySQL
     return this.mysqlConnection
-      .queryAsync(
+      .query(
         'INSERT INTO post (source_id, source, title, announce, `text`, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-        [
-          this.siteId,
-          post.url,
-          title,
-          description,
-          content,
-          post.pubdate,
-        ],
+        [this.siteId, post.url, title, description, content, post.pubdate],
       )
       .then((res) => {
         console.log(

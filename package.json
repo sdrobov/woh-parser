@@ -14,6 +14,7 @@
     "eslint-plugin-jsx-a11y": "^6.0.3",
     "eslint-plugin-react": "^7.9.1",
     "feedparser-promised": "git+https://github.com/sdrobov/feedparser-promised.git",
+    "google-auth-library": "^1.6.1",
     "googleapis": "^32.0.0",
     "js-beautify": "^1.7.5",
     "jsdom": "^11.5.1",
