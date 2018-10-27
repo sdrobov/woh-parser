@@ -24,39 +24,37 @@ class SiteParser {
     return this.parseDom();
   }
 
-  parseRss() {
+  async parseRss() {
     console.log(`parsing rss-powered site id = ${this.siteId}`);
-    return feedparser.parse(this.settings.rssUrl).then((items) => {
-      const maxItems = this.settings.limitMax || items.length;
 
-      const articles = items
-        .slice(0, maxItems)
-        .filter((item) => {
-          if (this.lastPostDate === null) {
-            return true;
-          }
+    const items = await feedparser.parse(this.settings.rssUrl);
+    const maxItems = this.settings.limitMax || items.length;
+    const articles = items.slice(0, maxItems)
+      .filter((item) => {
+        if (this.lastPostDate === null) {
+          return true;
+        }
+        return new Date(item.pubdate) >= this.lastPostDate;
+      })
+      .map((item) => {
+        const article = {
+          title: item.title,
+          url: item.origlink || item.link,
+          pubdate: item.pubdate,
+          description: item.summary || null,
+        };
 
-          return new Date(item.pubdate) >= this.lastPostDate;
-        })
-        .map((item) => {
-          const article = {
-            title: item.title,
-            url: item.origlink || item.link,
-            pubdate: item.pubdate,
-            description: item.summary || null,
-          };
+        return article;
+      });
 
-          return article;
-        });
-
-      return this.parseArticles(articles);
-    });
+    return this.parseArticles(articles);
   }
 
   parseDom(url) {
     console.log(`parsing css-powered site id = ${this.siteId}`);
 
     const mainUrl = url || this.settings.mainUrl;
+
     return JSDOM.fromURL(mainUrl, {
       referer: 'https://yandex.ru',
       userAgent:
@@ -242,7 +240,6 @@ class SiteParser {
 
     console.log(`saving: ${title} for site id = ${this.siteId}`);
 
-    // language=MySQL
     return this.mysqlConnection
       .query(
         'INSERT INTO post (source_id, source, title, announce, `text`, created_at) VALUES (?, ?, ?, ?, ?, ?)',

@@ -11,8 +11,8 @@ let mysqlConnection = null;
 
 /**
  * lock site for processing
- * @param siteId
- * @returns {*|Promise<T>}
+ * @param {number} siteId
+ * @returns {Promise<Array>}
  */
 async function lockSite(siteId) {
   return mysqlConnection.execute(
@@ -23,8 +23,8 @@ async function lockSite(siteId) {
 
 /**
  * unlock site for processing
- * @param siteId
- * @returns {*|Promise<T>}
+ * @param {number} siteId
+ * @returns {Promise<Array>}
  */
 async function unlockSite(siteId) {
   return mysqlConnection.execute(
@@ -34,9 +34,8 @@ async function unlockSite(siteId) {
 }
 
 /**
- * fetches last post date
- * @param siteId
- * @returns {*|PromiseLike<T>|Promise<T>}
+ * @param {number} siteId
+ * @returns {Promise<Date>}
  */
 async function getLastPostDate(siteId) {
   const [source] = await mysqlConnection.execute(
