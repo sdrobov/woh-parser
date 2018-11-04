@@ -63,7 +63,7 @@ async function main() {
     password: env.MYSQL_PASSWORD,
     database: env.MYSQL_DATABASE,
   });
-  const sources = await mysqlConnection.execute('SELECT * FROM source WHERE is_locked = 0');
+  const [sources] = await mysqlConnection.execute('SELECT * FROM source WHERE is_locked = 0');
   if (!sources || !sources[0]) {
     throw new Error('empty result set');
   }

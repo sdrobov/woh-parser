@@ -1,26 +1,27 @@
 {
   "name": "site-crawler",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "crawler.js",
   "author": "Sergey Drobov <serch.m@gmail.com>",
   "license": "UNLICENSED",
   "private": true,
   "dependencies": {
+    "axios": "^0.18.0",
     "dotenv": "^6.0.0",
-    "eslint": "^5.0.0",
+    "feedparser-promised": "git+https://github.com/sdrobov/feedparser-promised.git",
+    "js-beautify": "^1.8.8",
+    "jsdom": "^12.0.0",
+    "moment": "^2.19.4",
+    "mysql2": "^1.5.1",
+    "sanitize-html": "^1.16.3"
+  },
+  "devDependencies": {
+    "eslint": "^5.8.0",
     "eslint-config-airbnb": "^17.0.0",
     "eslint-plugin-import": "^2.12.0",
     "eslint-plugin-jsx-a11y": "^6.0.3",
     "eslint-plugin-react": "^7.9.1",
-    "feedparser-promised": "git+https://github.com/sdrobov/feedparser-promised.git",
-    "google-auth-library": "^1.6.1",
-    "googleapis": "^32.0.0",
-    "js-beautify": "^1.7.5",
-    "jsdom": "^12.0.0",
-    "moment": "^2.19.4",
-    "mysql2": "^1.5.1",
-    "pre-commit": "^1.2.2",
-    "sanitize-html": "^1.16.3"
+    "pre-commit": "^1.2.2"
   },
   "scripts": {
     "start": "node crawler",
