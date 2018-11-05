@@ -1,7 +1,7 @@
 {
   "name": "site-crawler",
   "version": "1.0.0",
-  "main": "crawler.js",
+  "main": "index.js",
   "author": "Sergey Drobov <serch.m@gmail.com>",
   "license": "UNLICENSED",
   "private": true,
@@ -10,9 +10,9 @@
     "dotenv": "^6.0.0",
     "feedparser-promised": "git+https://github.com/sdrobov/feedparser-promised.git",
     "js-beautify": "^1.8.8",
-    "jsdom": "^12.0.0",
+    "jsdom": "^13.0.0",
     "moment": "^2.19.4",
-    "mysql2": "^1.5.1",
+    "mysql2": "^1.6.2",
     "sanitize-html": "^1.16.3"
   },
   "devDependencies": {
@@ -24,7 +24,7 @@
     "pre-commit": "^1.2.2"
   },
   "scripts": {
-    "start": "node crawler",
+    "start": "node index.js",
     "lint": "node node_modules/.bin/eslint *.js . --ignore-path .eslintrc.js --fix"
   },
   "pre-commit": [

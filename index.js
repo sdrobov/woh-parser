@@ -57,42 +57,41 @@ async function updateLastPostDate(siteId) {
 }
 
 async function main() {
-  mysqlConnection = await mysql({
-    host: env.MYSQL_HOST,
-    user: env.MYSQL_USER,
-    password: env.MYSQL_PASSWORD,
-    database: env.MYSQL_DATABASE,
-  });
-  const [sources] = await mysqlConnection.execute('SELECT * FROM source WHERE is_locked = 0');
-  if (!sources || !sources[0]) {
-    throw new Error('empty result set');
+  if (!mysqlConnection) {
+    mysqlConnection = await mysql({
+      host: env.MYSQL_HOST,
+      user: env.MYSQL_USER,
+      password: env.MYSQL_PASSWORD,
+      database: env.MYSQL_DATABASE,
+    });
   }
 
-  return Promise.all(
-    sources.map(source => lockSite(source.id)
-      .then(() => getLastPostDate(source.id))
-      .then((lastPostDate) => {
-        const settings = JSON.parse(source.settings);
-        const parser = new Parser(
-          source.id,
-          settings,
-          mysqlConnection,
-          lastPostDate,
-        );
+  setInterval(main, 60000);
 
-        return parser.parse();
-      })
-      .then(() => updateLastPostDate(source.id))
-      .then(() => unlockSite(source.id))
-      .catch((err) => {
-        unlockSite(source.id);
+  const [sources] = await mysqlConnection.execute('SELECT * FROM source WHERE is_locked = 0');
 
-        throw err;
-      })),
-  ).then(() => mysqlConnection.close());
+  [].forEach.call(sources || [], async (source) => {
+    try {
+      await lockSite(source.id);
+
+      const lastPostDate = await getLastPostDate(source.id);
+      const settings = JSON.parse(source.settings);
+      const parser = new Parser(
+        source.id,
+        settings,
+        mysqlConnection,
+        lastPostDate,
+      );
+
+      await parser.parse();
+      await updateLastPostDate(source.id);
+      await unlockSite(source.id);
+    } catch (e) {
+      console.error(e);
+
+      await unlockSite(source.id);
+    }
+  });
 }
 
-main().catch((err) => {
-  console.log(err);
-  process.exit(1);
-});
+main();

@@ -14,6 +14,7 @@ const TYPE_YOUTUBE = 3;
 class SiteParser {
   constructor(siteId, settings, mysqlConnection, lastPostDate) {
     this.siteId = siteId;
+    this.isApproved = !!settings.isApproved;
     this.settings = settings;
     this.lastPostDate = lastPostDate || new Date(0);
     this.mysqlConnection = mysqlConnection;
@@ -41,9 +42,14 @@ class SiteParser {
     console.log(`parsing youtube site id = ${this.siteId}`);
 
     const apiKey = env.GAPI_KEY;
-    const response = await axios(`https://www.googleapis.com/youtube/v3/search?key=${apiKey}&channelId=${this.settings.url}&part=snippet,id&order=date&maxResults=50`);
+    const response = await axios(
+      `https://www.googleapis.com/youtube/v3/search?key=${apiKey}&channelId=${
+        this.settings.url
+      }&part=snippet,id&order=date&maxResults=50`,
+    );
     const { items } = JSON.parse(response);
-    [].filter.call(items || [], video => new Date(video.snippet.publishedAt) >= this.lastPostDate)
+    [].filter
+      .call(items || [], video => new Date(video.snippet.publishedAt) >= this.lastPostDate)
       .map(async (video) => {
         await this.savePost({
           url: `https://www.youtube.com/watch?v=${video.id.videoId}`,
@@ -61,14 +67,8 @@ class SiteParser {
     const items = await feedparser.parse(this.settings.url);
     const maxItems = this.settings.limitMax || items.length;
     const articles = [].slice
-      .call(items || [], (0, maxItems))
-      .filter((item) => {
-        if (this.lastPostDate === null) {
-          return true;
-        }
-
-        return new Date(item.pubdate) >= this.lastPostDate;
-      })
+      .call(items || [], 0, maxItems)
+      .filter(item => !this.lastPostDate || new Date(item.pubdate) >= this.lastPostDate)
       .map((item) => {
         const article = {
           title: item.title,
@@ -171,21 +171,18 @@ class SiteParser {
     return this.parseArticles(articles);
   }
 
-  async parseArticles(articles) {
-    return Promise.all(
-      [].filter.call(articles || [], article => !!article).map(async (article) => {
-        const currentDate = new Date(article.pubdate);
-
+  parseArticles(articles) {
+    [].filter.call(articles || [], article => !!article)
+      .forEach(async (article) => {
         const content = await this.getPage(article.url);
-        this.savePost({
+        await this.savePost({
           url: article.url,
           title: article.title,
           description: article.description,
           content,
-          pubdate: currentDate,
+          pubdate: new Date(article.pubdate),
         });
-      }),
-    );
+      });
   }
 
   async getPage(url, contentAdd) {
@@ -266,21 +263,22 @@ class SiteParser {
 
     console.log(`saving: ${title} for site id = ${this.siteId}`);
 
-    return this.mysqlConnection
-      .query(
-        'INSERT INTO source_post_preview (source_id, title, announce, `text`, created_at) VALUES (?, ?, ?, ?, ?)',
+    try {
+      const res = await this.mysqlConnection.query(
+        `INSERT INTO ${
+          this.isApproved ? 'post' : 'source_post_preview'
+        } (source_id, title, announce, \`text\`, created_at) VALUES (?, ?, ?, ?, ?)`,
         [this.siteId, title, description, content, post.pubdate],
-      )
-      .then((res) => {
-        console.log(
-          `saved: ${title} for site id = ${this.siteId}, post id = ${
-            res.insertId
-          }, post pubdate = ${post.pubdate}`,
-        );
-      })
-      .catch((err) => {
-        this.siteError(err);
-      });
+      );
+
+      console.log(
+        `saved: ${title} for site id = ${this.siteId}, post id = ${res.insertId}, post pubdate = ${
+          post.pubdate
+        }`,
+      );
+    } catch (err) {
+      this.siteError(err);
+    }
   }
 
   siteError(error) {
