@@ -3,11 +3,13 @@
 const path = require('path');
 const { config: dotenv } = require('dotenv');
 const { createConnection: mysql } = require('mysql2/promise');
+const express = require('express');
 const Parser = require('./parser');
 
 dotenv({ path: path.resolve(__dirname, '.env') });
 const { env } = process;
 let mysqlConnection = null;
+const app = express();
 
 /**
  * lock site for processing
@@ -56,7 +58,31 @@ async function updateLastPostDate(siteId) {
   );
 }
 
-async function main() {
+async function parseSource(source, manual = false) {
+  try {
+    await lockSite(source.id);
+
+    const lastPostDate = await getLastPostDate(source.id);
+    const settings = JSON.parse(source.settings);
+    settings.manual = manual;
+    const parser = new Parser(
+      source.id,
+      settings,
+      mysqlConnection,
+      lastPostDate,
+    );
+
+    await parser.parse();
+    await updateLastPostDate(source.id);
+    await unlockSite(source.id);
+  } catch (e) {
+    console.error(e);
+
+    await unlockSite(source.id);
+  }
+}
+
+async function connectToMysql() {
   if (!mysqlConnection) {
     mysqlConnection = await mysql({
       host: env.MYSQL_HOST,
@@ -65,33 +91,42 @@ async function main() {
       database: env.MYSQL_DATABASE,
     });
   }
+}
+
+app.get('/', async (req, res) => {
+  const { sourceId } = req.query;
+  if (!sourceId) {
+    res.status(400).json({ error: 'source id is required' });
+
+    return;
+  }
+
+  await connectToMysql();
+
+  const [[source]] = await mysqlConnection.execute(
+    'SELECT * FROM source WHERE is_locked = 0 AND id = ?',
+    [sourceId],
+  );
+  if (!source) {
+    res.status(404).json({ error: 'source not found' });
+
+    return;
+  }
+
+  parseSource(source, true);
+
+  res.status(200).json({ status: 'source is parsing' });
+});
+
+async function main() {
+  await connectToMysql();
 
   setInterval(main, 60000);
 
   const [sources] = await mysqlConnection.execute('SELECT * FROM source WHERE is_locked = 0');
 
-  [].forEach.call(sources || [], async (source) => {
-    try {
-      await lockSite(source.id);
-
-      const lastPostDate = await getLastPostDate(source.id);
-      const settings = JSON.parse(source.settings);
-      const parser = new Parser(
-        source.id,
-        settings,
-        mysqlConnection,
-        lastPostDate,
-      );
-
-      await parser.parse();
-      await updateLastPostDate(source.id);
-      await unlockSite(source.id);
-    } catch (e) {
-      console.error(e);
-
-      await unlockSite(source.id);
-    }
-  });
+  [].forEach.call(sources || [], parseSource);
 }
 
 main();
+app.listen(env.PORT || 8080);

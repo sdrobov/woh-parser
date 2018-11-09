@@ -20,18 +20,26 @@ class SiteParser {
     this.mysqlConnection = mysqlConnection;
     this.tagsWhitelist = this.settings.tagsWhitelist || JSON.parse(env.TAGS_WHITELIST);
     this.contentRegexps = this.settings.contentRegexps || JSON.parse(env.GLOBAL_CONTENT_REGEXP);
+    this.reallyParse = (!settings.isApproved && settings.manual) || !!settings.isApproved;
   }
 
   async parse() {
+    if (!this.reallyParse) {
+      return;
+    }
+
     // eslint-disable-next-line default-case
     switch (this.settings.type) {
       case TYPE_DOM:
+        // eslint-disable-next-line consistent-return
         return this.parseDom();
 
       case TYPE_RSS:
+        // eslint-disable-next-line consistent-return
         return this.parseRss();
 
       case TYPE_YOUTUBE:
+        // eslint-disable-next-line consistent-return
         return this.parseYoutube();
     }
 
@@ -210,10 +218,8 @@ class SiteParser {
       }
     } else if (contentAdd) {
       content = contentAdd;
-    }
-
-    if (!content) {
-      throw new Error(`no content found at url: ${url}`);
+    } else {
+      return '';
     }
 
     return content;
@@ -235,10 +241,10 @@ class SiteParser {
       .replace(/<[^/>]*>\s*<\/[^>]+>/gm, '')
       .trim();
 
-    this.contentRegexps.forEach((regexp) => {
-      const r = new RegExp(regexp.search);
-      if (r.test(content)) {
-        content = content.replace(r, regexp.replace);
+    [].forEach.call(this.contentRegexps || [], ({ search, replace }) => {
+      const re = new RegExp(search);
+      if (re.test(content)) {
+        content = content.replace(re, replace);
       }
     });
 
@@ -270,6 +276,12 @@ class SiteParser {
         } (source_id, title, announce, \`text\`, created_at) VALUES (?, ?, ?, ?, ?)`,
         [this.siteId, title, description, content, post.pubdate],
       );
+      if (this.isApproved) {
+        await this.mysqlConnection.query(
+          'UPDATE source SET last_post_date = ? WHERE id = ? AND last_post_date < ?',
+          [post.pubdate, this.siteId, post.pubdate],
+        );
+      }
 
       console.log(
         `saved: ${title} for site id = ${this.siteId}, post id = ${res.insertId}, post pubdate = ${
