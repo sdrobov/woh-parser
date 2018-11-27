@@ -10,7 +10,7 @@ dotenv({ path: path.resolve(__dirname, '.env') });
 const { env } = process;
 let mysqlConnection = null;
 const app = express();
-let loopInterval = null;
+let loopTimeout = null;
 let httpServer = null;
 
 /**
@@ -109,7 +109,7 @@ app.get('/', async (req, res) => {
 async function parserLoop() {
   await connectToMysql();
 
-  loopInterval = setInterval(parserLoop, 60000);
+  loopTimeout = setTimeout(parserLoop, 60000);
 
   const [sources] = await mysqlConnection.execute('SELECT * FROM source WHERE is_locked = 0');
 
@@ -131,7 +131,7 @@ process.on('SIGINT', () => {
       process.exit(1);
     }
 
-    clearInterval(loopInterval);
+    clearTimeout(loopTimeout);
     await mysqlConnection.end();
 
     process.exit(0);
