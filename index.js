@@ -10,6 +10,8 @@ dotenv({ path: path.resolve(__dirname, '.env') });
 const { env } = process;
 let mysqlConnection = null;
 const app = express();
+let loopInterval = null;
+let httpServer = null;
 
 /**
  * lock site for processing
@@ -17,10 +19,7 @@ const app = express();
  * @returns {Promise<Array>}
  */
 async function lockSite(siteId) {
-  return mysqlConnection.execute(
-    'UPDATE source SET is_locked = 1 WHERE id = ?',
-    [siteId],
-  );
+  return mysqlConnection.execute('UPDATE source SET is_locked = 1 WHERE id = ?', [siteId]);
 }
 
 /**
@@ -29,10 +28,7 @@ async function lockSite(siteId) {
  * @returns {Promise<Array>}
  */
 async function unlockSite(siteId) {
-  return mysqlConnection.execute(
-    'UPDATE source SET is_locked = 0 WHERE id = ?',
-    [siteId],
-  );
+  return mysqlConnection.execute('UPDATE source SET is_locked = 0 WHERE id = ?', [siteId]);
 }
 
 /**
@@ -40,11 +36,8 @@ async function unlockSite(siteId) {
  * @returns {Promise<Date>}
  */
 async function getLastPostDate(siteId) {
-  const [source] = await mysqlConnection.execute(
-    'SELECT * FROM source WHERE id = ?',
-    [siteId],
-  );
-  const lastPostDate = (source ? (source.last_post_date || 0) : 0);
+  const [source] = await mysqlConnection.execute('SELECT * FROM source WHERE id = ?', [siteId]);
+  const lastPostDate = source ? source.last_post_date || 0 : 0;
 
   return new Date(lastPostDate);
 }
@@ -52,10 +45,10 @@ async function getLastPostDate(siteId) {
 async function updateLastPostDate(siteId) {
   const lastPostDate = await getLastPostDate(siteId);
 
-  return mysqlConnection.execute(
-    'UPDATE source SET last_post_date = ? WHERE id = ?',
-    [lastPostDate, siteId],
-  );
+  return mysqlConnection.execute('UPDATE source SET last_post_date = ? WHERE id = ?', [
+    lastPostDate,
+    siteId,
+  ]);
 }
 
 async function parseSource(source, manual = false) {
@@ -65,12 +58,7 @@ async function parseSource(source, manual = false) {
     const lastPostDate = await getLastPostDate(source.id);
     const settings = JSON.parse(source.settings);
     settings.manual = manual;
-    const parser = new Parser(
-      source.id,
-      settings,
-      mysqlConnection,
-      lastPostDate,
-    );
+    const parser = new Parser(source.id, settings, mysqlConnection, lastPostDate);
 
     await parser.parse();
     await updateLastPostDate(source.id);
@@ -118,15 +106,36 @@ app.get('/', async (req, res) => {
   res.status(200).json({ status: 'source is parsing' });
 });
 
-async function main() {
+async function parserLoop() {
   await connectToMysql();
 
-  setInterval(main, 60000);
+  loopInterval = setInterval(parserLoop, 60000);
 
   const [sources] = await mysqlConnection.execute('SELECT * FROM source WHERE is_locked = 0');
 
   [].forEach.call(sources || [], parseSource);
 }
 
+async function main() {
+  await parserLoop();
+  httpServer = app.listen(env.PORT || 8080);
+
+  process.send('ready');
+}
+
+process.on('SIGINT', () => {
+  httpServer.close(async (err) => {
+    if (err) {
+      console.error(err);
+
+      process.exit(1);
+    }
+
+    clearInterval(loopInterval);
+    await mysqlConnection.end();
+
+    process.exit(0);
+  });
+});
+
 main();
-app.listen(env.PORT || 8080);
