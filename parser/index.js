@@ -1,6 +1,6 @@
 const feedparser = require('feedparser-promised');
 const moment = require('moment');
-const { JSDOM } = require('jsdom');
+const { JSDOM, VirtualConsole } = require('jsdom');
 const sanitizeHTML = require('sanitize-html');
 const { html: beautify } = require('js-beautify');
 const axios = require('axios');
@@ -200,16 +200,40 @@ class SiteParser {
   }
 
   async getPage(url, contentAdd) {
+    const virtualConsole = new VirtualConsole();
+    virtualConsole.on('error', () => { });
+    virtualConsole.on('warn', () => { });
+    virtualConsole.on('info', () => { });
+    virtualConsole.on('dir', () => { });
+
     const dom = await JSDOM.fromURL(url, {
       referer: 'https://yandex.ru',
       userAgent:
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.94 Safari/537.36',
+      runScripts: 'dangerously',
+      resources: 'usable',
+      pretendToBeVisual: true,
+      virtualConsole,
+    }).catch(() => { });
+
+    const html = dom.serialize();
+
+    const article = await axios.post(`http://${env.PARSER_HOST}:${env.PARSER_PORT}/article`, {
+      url,
+      body: html,
+    }).catch((e) => {
+      console.error(e);
     });
 
-    let content = dom.window.document.querySelector(this.settings.contentSelector);
-    if (content) {
-      content = content.innerHTML;
+    let content;
+    if (article.data) {
+      content = article.data.text;
+    } else {
+      content = dom.window.document.querySelector(this.settings.contentSelector);
+      content = content ? content.innerHTML : content;
+    }
 
+    if (content) {
       if (contentAdd) {
         content = contentAdd + content;
       }
