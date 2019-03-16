@@ -84,7 +84,8 @@ async function connectToMysql() {
 app.get('/', async (req, res) => {
   const { sourceId } = req.query;
   if (!sourceId) {
-    res.status(400).json({ error: 'source id is required' });
+    res.status(400)
+      .json({ error: 'source id is required' });
 
     return;
   }
@@ -96,14 +97,16 @@ app.get('/', async (req, res) => {
     [sourceId],
   );
   if (!source) {
-    res.status(404).json({ error: 'source not found' });
+    res.status(404)
+      .json({ error: 'source not found' });
 
     return;
   }
 
   parseSource(source, true);
 
-  res.status(200).json({ status: 'source is parsing' });
+  res.status(200)
+    .json({ status: 'source is parsing' });
 });
 
 async function parserLoop() {
@@ -117,10 +120,13 @@ async function parserLoop() {
 }
 
 async function main() {
-  await parserLoop();
   httpServer = app.listen(env.PORT || 8080);
 
-  process.send('ready');
+  if (process.send) {
+    process.send('ready');
+  }
+
+  await parserLoop();
 }
 
 process.on('SIGINT', () => {
@@ -138,4 +144,9 @@ process.on('SIGINT', () => {
   });
 });
 
-main();
+main()
+  .catch((err) => {
+    console.error(err);
+
+    process.exit(1);
+  });

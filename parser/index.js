@@ -49,15 +49,25 @@ class SiteParser {
   async parseYoutube() {
     console.log(`parsing youtube site id = ${this.siteId}`);
 
+    const isUser = /\/user\//.test(this.settings.url);
+    const channelId = isUser
+      ? /\/user\/([^/?]+)/.exec(this.settings.url)
+      : /\/channel\/([^/?]+)/.exec(this.settings.url);
+
+    if (!channelId) {
+      return;
+    }
+
     const apiKey = env.GAPI_KEY;
-    const response = await axios(
-      `https://www.googleapis.com/youtube/v3/search?key=${apiKey}&channelId=${
-        this.settings.url
-      }&part=snippet,id&order=date&maxResults=50`,
-    );
-    const { items } = JSON.parse(response);
+    const response = await axios('https://www.googleapis.com/youtube/v3/search'
+      + `?key=${apiKey}`
+      + `&${isUser ? 'userId' : 'channelId'}=${channelId[1]}`
+      + '&part=snippet,id'
+      + '&order=date'
+      + '&maxResults=50');
     [].filter
-      .call(items || [], video => new Date(video.snippet.publishedAt) >= this.lastPostDate)
+      .call(response.data ? (response.data.items || []) : [],
+        video => new Date(video.snippet.publishedAt) >= this.lastPostDate)
       .map(async (video) => {
         await this.savePost({
           url: `https://www.youtube.com/watch?v=${video.id.videoId}`,
@@ -72,21 +82,17 @@ class SiteParser {
   async parseRss() {
     console.log(`parsing rss-powered site id = ${this.siteId}`);
 
-    const items = await feedparser.parse(this.settings.url);
+    const items = await feedparser.parse({ uri: this.settings.url, gzip: true });
     const maxItems = this.settings.limitMax || items.length;
     const articles = [].slice
       .call(items || [], 0, maxItems)
       .filter(item => !this.lastPostDate || new Date(item.pubdate) >= this.lastPostDate)
-      .map((item) => {
-        const article = {
-          title: item.title,
-          url: item.origlink || item.link,
-          pubdate: item.pubdate,
-          description: item.summary || null,
-        };
-
-        return article;
-      });
+      .map(item => ({
+        title: item.title,
+        url: item.origlink || item.link,
+        pubdate: item.pubdate,
+        description: item.summary || null,
+      }));
 
     return this.parseArticles(articles);
   }
