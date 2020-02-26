@@ -7,6 +7,7 @@ WORKDIR /app
 RUN touch ./.env
 
 COPY index.js .
+COPY console.js .
 COPY package.json .
 COPY package-lock.json .
 COPY ecosystem.config.js .
