@@ -4,6 +4,7 @@ const path = require('path');
 const { config: dotenv } = require('dotenv');
 const { createConnection: mysql } = require('mysql2/promise');
 const express = require('express');
+const Sentry = require('@sentry/node');
 const Parser = require('./parser');
 const consolePolyfill = require('./console');
 
@@ -12,6 +13,9 @@ dotenv({ path: path.resolve(__dirname, '.env') });
 consolePolyfill();
 
 const { env } = process;
+if (env.SENTRY_DSN) {
+  Sentry.init({ dsn: env.SENTRY_DSN });
+}
 let mysqlConnection = null;
 const app = express();
 let loopTimeout = null;
