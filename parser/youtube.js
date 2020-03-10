@@ -1,4 +1,5 @@
 const axios = require('axios');
+const Sentry = require('@sentry/node');
 const AbstractParser = require('./abstract_parser');
 
 const { env } = process;
@@ -13,6 +14,7 @@ class YouTubeParser extends AbstractParser {
       : /\/channel\/([^/?]+)/.exec(this.settings.url);
 
     if (!channelId) {
+      Sentry.captureException(`cant parse channelId for source: ${this.settings.siteId}; url: ${this.settings.url}`);
       return [];
     }
 

@@ -58,6 +58,7 @@ async function savePost(post) {
     console.info(`saved: post id = ${res.insertId}; site id: ${post.siteId}, post pubdate: ${post.pubdate.toISOString()}`);
   } catch (e) {
     console.error(e);
+    Sentry.captureException(e);
   }
 }
 
@@ -84,6 +85,7 @@ async function parseSource(source, manual = false) {
     await unlockSite(source.id);
   } catch (e) {
     console.error(e);
+    Sentry.captureException(e);
 
     await unlockSite(source.id);
   }
@@ -152,6 +154,7 @@ process.on('SIGINT', () => {
   httpServer.close(async (err) => {
     if (err) {
       console.error(err);
+      Sentry.captureException(err);
 
       process.exit(1);
     }
@@ -171,6 +174,7 @@ process.on('SIGINT', () => {
 main()
   .catch((err) => {
     console.error(err);
+    Sentry.captureException(err);
 
     process.exit(1);
   });
