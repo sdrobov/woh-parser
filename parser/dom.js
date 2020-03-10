@@ -3,6 +3,7 @@ const { JSDOM, VirtualConsole } = require('jsdom');
 const sanitizeHTML = require('sanitize-html');
 const moment = require('moment');
 const axios = require('axios');
+const Sentry = require('@sentry/node');
 const AbstractParser = require('./abstract_parser');
 
 const { env } = process;
@@ -130,12 +131,16 @@ class DomParser extends AbstractParser {
 
     const html = dom.serialize();
 
-    const article = await axios.post(`http://${env.PARSER_HOST}:${env.PARSER_PORT}/article`, {
-      url,
-      body: html,
-    }).catch((e) => {
+    let article;
+    try {
+      article = await axios.post(`http://${env.PARSER_HOST}:${env.PARSER_PORT}/article`, {
+        url,
+        body: html,
+      });
+    } catch (e) {
       console.error(e);
-    });
+      Sentry.captureException(e);
+    }
 
     let content;
     if (article.data) {

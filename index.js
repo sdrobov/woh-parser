@@ -4,6 +4,7 @@ const path = require('path');
 const { config: dotenv } = require('dotenv');
 const { createConnection: mysql } = require('mysql2/promise');
 const express = require('express');
+const Sentry = require('@sentry/node');
 const Parser = require('./parser');
 const consolePolyfill = require('./console');
 
@@ -12,6 +13,9 @@ dotenv({ path: path.resolve(__dirname, '.env') });
 consolePolyfill();
 
 const { env } = process;
+if (env.SENTRY_DSN) {
+  Sentry.init({ dsn: env.SENTRY_DSN });
+}
 let mysqlConnection = null;
 const app = express();
 let loopTimeout = null;
@@ -54,6 +58,7 @@ async function savePost(post) {
     console.info(`saved: post id = ${res.insertId}; site id: ${post.siteId}, post pubdate: ${post.pubdate.toISOString()}`);
   } catch (e) {
     console.error(e);
+    Sentry.captureException(e);
   }
 }
 
@@ -80,6 +85,7 @@ async function parseSource(source, manual = false) {
     await unlockSite(source.id);
   } catch (e) {
     console.error(e);
+    Sentry.captureException(e);
 
     await unlockSite(source.id);
   }
@@ -148,6 +154,7 @@ process.on('SIGINT', () => {
   httpServer.close(async (err) => {
     if (err) {
       console.error(err);
+      Sentry.captureException(err);
 
       process.exit(1);
     }
@@ -167,6 +174,7 @@ process.on('SIGINT', () => {
 main()
   .catch((err) => {
     console.error(err);
+    Sentry.captureException(err);
 
     process.exit(1);
   });
