@@ -3,7 +3,7 @@ const DomParser = require('./dom');
 
 class RssParser extends DomParser {
   async parse() {
-    console.log(`parsing rss-powered site id: ${this.settins.siteId}; lastPostDate: ${this.lastPostDate.toISOString()}`);
+    console.log(`parsing rss-powered site id: ${this.settings.siteId}; lastPostDate: ${this.lastPostDate.toISOString()}`);
 
     const items = await feedparser.parse({ uri: this.settings.url, gzip: true });
     const maxItems = this.settings.limitMax || items.length;

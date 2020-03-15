@@ -4,7 +4,6 @@ const path = require('path');
 const { config: dotenv } = require('dotenv');
 const { createConnection: mysql } = require('mysql2/promise');
 const express = require('express');
-const Sentry = require('@sentry/node');
 const Parser = require('./parser');
 const consolePolyfill = require('./console');
 
@@ -13,9 +12,6 @@ dotenv({ path: path.resolve(__dirname, '.env') });
 consolePolyfill();
 
 const { env } = process;
-if (env.SENTRY_DSN) {
-  Sentry.init({ dsn: env.SENTRY_DSN });
-}
 let mysqlConnection = null;
 const app = express();
 let loopTimeout = null;
@@ -33,10 +29,19 @@ async function lockSite(siteId) {
 /**
  * unlock site for processing
  * @param {number} siteId
+ * @param {boolean} success
  * @returns {Promise<Array>}
  */
-async function unlockSite(siteId) {
-  return mysqlConnection.execute('UPDATE source SET is_locked = 0 WHERE id = ?', [siteId]);
+async function unlockSite(siteId, success = true) {
+  let query = 'UPDATE source SET is_locked = 0 ';
+  if (success) {
+    query += ', last_success_date = CURRENT_TIMESTAMP, last_success_count = last_success_count + 1, last_errors_count = 0';
+  } else {
+    query += ', last_error_date = CURRENT_TIMESTAMP, last_success_count = 0, last_errors_count = last_errors_count + 1';
+  }
+  query += ' WHERE id = ?';
+
+  return mysqlConnection.execute(query, [siteId]);
 }
 
 async function updateLastPostDate(siteId, lastPostDate) {
@@ -58,20 +63,19 @@ async function savePost(post) {
     console.info(`saved: post id = ${res.insertId}; site id: ${post.siteId}, post pubdate: ${post.pubdate.toISOString()}`);
   } catch (e) {
     console.error(e);
-    Sentry.captureException(e);
   }
 }
 
-async function parseSource(source, manual = false) {
+async function parseSource(source) {
   try {
     await lockSite(source.id);
 
     const settings = JSON.parse(source.settings);
-    settings.manual = manual;
+    settings.manual = source.manual || false;
     settings.siteId = source.id;
     settings.lastPostDate = source.last_post_date;
 
-    const parser = new Parser(settings, mysqlConnection);
+    const parser = new Parser(settings);
 
     const posts = await parser.parse();
     const lastPostDate = [].reduce.call(
@@ -85,9 +89,8 @@ async function parseSource(source, manual = false) {
     await unlockSite(source.id);
   } catch (e) {
     console.error(e);
-    Sentry.captureException(e);
 
-    await unlockSite(source.id);
+    await unlockSite(source.id, false);
   }
 }
 
@@ -124,7 +127,8 @@ app.get('/', async (req, res) => {
     return;
   }
 
-  parseSource(source, true);
+  source.manual = true;
+  parseSource(source);
 
   res.status(200)
     .json({ status: 'source is parsing' });
@@ -154,7 +158,6 @@ process.on('SIGINT', () => {
   httpServer.close(async (err) => {
     if (err) {
       console.error(err);
-      Sentry.captureException(err);
 
       process.exit(1);
     }
@@ -163,7 +166,7 @@ process.on('SIGINT', () => {
 
     const [sources] = await mysqlConnection.execute('SELECT * FROM source WHERE is_locked = 0');
 
-    [].map.call(sources || [], source => source.id).forEach(unlockSite);
+    [].map.call(sources || [], source => source.id).forEach(sourceId => unlockSite(sourceId, true));
 
     await mysqlConnection.end();
 
@@ -174,7 +177,6 @@ process.on('SIGINT', () => {
 main()
   .catch((err) => {
     console.error(err);
-    Sentry.captureException(err);
 
     process.exit(1);
   });
