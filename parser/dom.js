@@ -3,7 +3,6 @@ const { JSDOM, VirtualConsole } = require('jsdom');
 const sanitizeHTML = require('sanitize-html');
 const moment = require('moment');
 const axios = require('axios');
-const Sentry = require('@sentry/node');
 const AbstractParser = require('./abstract_parser');
 
 const { env } = process;
@@ -138,8 +137,7 @@ class DomParser extends AbstractParser {
         body: html,
       });
     } catch (e) {
-      console.error(e);
-      Sentry.captureException(e);
+      console.warn(e);
     }
 
     let content;
