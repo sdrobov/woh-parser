@@ -35,9 +35,9 @@ async function lockSite(siteId) {
 async function unlockSite(siteId, success = true) {
   let query = 'UPDATE source SET is_locked = 0 ';
   if (success) {
-    query += ', last_success_date = CURRENT_TIMESTAMP, last_success_count = last_success_count + 1, last_errors_count = 0';
+    query += ', last_success_at = CURRENT_TIMESTAMP, last_success_count = last_success_count + 1, last_errors_count = 0';
   } else {
-    query += ', last_error_date = CURRENT_TIMESTAMP, last_success_count = 0, last_errors_count = last_errors_count + 1';
+    query += ', last_error_at = CURRENT_TIMESTAMP, last_success_count = 0, last_errors_count = last_errors_count + 1';
   }
   query += ' WHERE id = ?';
 
