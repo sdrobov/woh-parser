@@ -63,6 +63,7 @@ async function savePost(post) {
     console.info(`saved: post id = ${res.insertId}; site id: ${post.siteId}, post pubdate: ${post.pubdate.toISOString()}`);
   } catch (e) {
     console.error(e);
+    console.error(post);
   }
 }
 
