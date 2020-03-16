@@ -119,8 +119,9 @@ class DomParser extends AbstractParser {
     virtualConsole.on('info', () => { });
     virtualConsole.on('dir', () => { });
 
+    let dom;
     try {
-      const dom = await JSDOM.fromURL(url, {
+      dom = await JSDOM.fromURL(url, {
         referer: env.UA_REFERER,
         userAgent: env.UA_STRING,
         runScripts: 'dangerously',
@@ -134,6 +135,10 @@ class DomParser extends AbstractParser {
       return '';
     }
 
+    if (!dom) {
+      return '';
+    }
+    
     const html = dom.serialize();
 
     let article;
