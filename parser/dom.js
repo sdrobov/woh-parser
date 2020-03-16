@@ -119,14 +119,18 @@ class DomParser extends AbstractParser {
     virtualConsole.on('info', () => { });
     virtualConsole.on('dir', () => { });
 
-    const dom = await JSDOM.fromURL(url, {
-      referer: env.UA_REFERER,
-      userAgent: env.UA_STRING,
-      runScripts: 'dangerously',
-      resources: 'usable',
-      pretendToBeVisual: true,
-      virtualConsole,
-    }).catch((e) => { console.warn(e); });
+    try {
+      const dom = await JSDOM.fromURL(url, {
+        referer: env.UA_REFERER,
+        userAgent: env.UA_STRING,
+        runScripts: 'dangerously',
+        resources: 'usable',
+        pretendToBeVisual: true,
+        virtualConsole,
+      });
+    } catch (e) {
+      console.error(e);
+    }
 
     const html = dom.serialize();
 
@@ -137,11 +141,11 @@ class DomParser extends AbstractParser {
         body: html,
       });
     } catch (e) {
-      console.warn(e);
+      console.error(e);
     }
 
     let content;
-    if (article.data) {
+    if (article && article.data) {
       content = article.data.text;
     } else {
       content = dom.window.document.querySelector(this.settings.contentSelector);
