@@ -3,8 +3,12 @@ const Sentry = require('@sentry/node');
 module.exports = () => {
   const { env } = process;
   const isDebug = env.NODE_ENV !== 'production';
-  if (env.SENTRY_DSN && !isDebug) {
-    Sentry.init({ dsn: env.SENTRY_DSN });
+  if (env.SENTRY_DSN) {
+    Sentry.init({
+      dsn: env.SENTRY_DSN,
+      environment: env.NODE_ENV,
+      attachStacktrace: true
+    });
   }
 
   const consoleLog = console.log;
