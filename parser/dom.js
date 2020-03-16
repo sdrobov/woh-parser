@@ -130,6 +130,8 @@ class DomParser extends AbstractParser {
       });
     } catch (e) {
       console.error(e);
+
+      return '';
     }
 
     const html = dom.serialize();
