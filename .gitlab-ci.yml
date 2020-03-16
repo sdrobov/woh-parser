@@ -41,7 +41,7 @@ stages:
     - chmod 600 ~/.ssh/id_rsa
     - ssh deploy@$HOST "docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD registry.gitlab.com"
     - ssh deploy@$HOST "docker pull registry.gitlab.com/woh/parser:$TAG"
-    - ssh deploy@$HOST "docker container stop woh-parser; sleep 1; docker run --name woh-parser --rm --add-host db.localhost:172.17.0.1 --env-file /home/deploy/woh-parser.env -d -p 3001:3000 registry.gitlab.com/woh/parser:$TAG"
+    - ssh deploy@$HOST "docker container stop woh-parser; sleep 1; docker run --name woh-parser --rm --add-host db.localhost:172.17.0.1 --add-host parser.localhost:172.17.0.1 --env-file /home/deploy/woh-parser.env -d -p 3001:3000 registry.gitlab.com/woh/parser:$TAG"
 
 build dev:
   <<: *common_build
