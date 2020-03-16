@@ -113,6 +113,10 @@ class DomParser extends AbstractParser {
   }
 
   async getPage(url, contentAdd) {
+    if (!this.settings.contentSelector) {
+      return '';
+    }
+    
     const virtualConsole = new VirtualConsole();
     virtualConsole.on('error', () => { });
     virtualConsole.on('warn', () => { });
