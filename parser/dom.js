@@ -116,7 +116,7 @@ class DomParser extends AbstractParser {
     if (!this.settings.contentSelector) {
       return '';
     }
-    
+
     const virtualConsole = new VirtualConsole();
     virtualConsole.on('error', () => { });
     virtualConsole.on('warn', () => { });
@@ -142,7 +142,7 @@ class DomParser extends AbstractParser {
     if (!dom) {
       return '';
     }
-    
+
     const html = dom.serialize();
 
     let article;
