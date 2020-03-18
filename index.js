@@ -145,6 +145,12 @@ async function parserLoop() {
   [].forEach.call(sources || [], parseSource);
 }
 
+async function unlockAllSources() {
+  await connectToMysql();
+
+  await mysqlConnection.execute('UPDATE source SET is_locked = 0');
+}
+
 async function main() {
   httpServer = app.listen(env.PORT || 8080);
 
@@ -152,24 +158,22 @@ async function main() {
     process.send('ready');
   }
 
+  await unlockAllSources();
   await parserLoop();
 }
 
 process.on('SIGINT', () => {
   httpServer.close(async (err) => {
+    clearTimeout(loopTimeout);
+
+    await unlockAllSources();
+    await mysqlConnection.end();
+
     if (err) {
       console.error(err);
 
       process.exit(1);
     }
-
-    clearTimeout(loopTimeout);
-
-    const [sources] = await mysqlConnection.execute('SELECT * FROM source WHERE is_locked = 0');
-
-    [].map.call(sources || [], source => source.id).forEach(sourceId => unlockSite(sourceId, true));
-
-    await mysqlConnection.end();
 
     process.exit(0);
   });
