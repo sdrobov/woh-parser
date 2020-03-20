@@ -140,7 +140,7 @@ async function parserLoop() {
 
   loopTimeout = setTimeout(parserLoop, 60000);
 
-  const [sources] = await mysqlConnection.execute('SELECT * FROM source WHERE is_locked = 0');
+  const [sources] = await mysqlConnection.execute('SELECT * FROM source WHERE is_locked = 0 AND is_enabled = 1');
 
   [].forEach.call(sources || [], parseSource);
 }
