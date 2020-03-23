@@ -32,16 +32,8 @@ async function lockSite(siteId) {
  * @param {boolean} success
  * @returns {Promise<Array>}
  */
-async function unlockSite(siteId, success = true) {
-  let query = 'UPDATE source SET is_locked = 0 ';
-  if (success) {
-    query += ', last_success_at = CURRENT_TIMESTAMP, last_success_count = last_success_count + 1, last_errors_count = 0';
-  } else {
-    query += ', last_error_at = CURRENT_TIMESTAMP, last_success_count = 0, last_errors_count = last_errors_count + 1';
-  }
-  query += ' WHERE id = ?';
-
-  return mysqlConnection.execute(query, [siteId]);
+async function unlockSite(siteId) {
+  return mysqlConnection.execute('UPDATE source SET is_locked = 0 WHERE id = ?', [siteId]);
 }
 
 async function updateLastPostDate(siteId, lastPostDate) {
@@ -67,7 +59,21 @@ async function savePost(post) {
   }
 }
 
+/**
+ * @param {number} sourceId
+ * @param {Date} begin
+ * @param {Date} end
+ * @param {number} parsed
+ * @param {boolean} isSuccess
+ * @param {string} error
+ */
+async function writeSourceStats(sourceId, begin, end, parsed, isSuccess, error) {
+  return mysqlConnection.execute('INSERT INTO source_stat VALUES(?, ?, ?, ?, ?, ?)', [sourceId, begin, end, parsed, isSuccess, error]);
+}
+
 async function parseSource(source) {
+  const begin = new Date();
+
   try {
     await lockSite(source.id);
 
@@ -88,10 +94,16 @@ async function parseSource(source) {
 
     await updateLastPostDate(source.id, lastPostDate);
     await unlockSite(source.id);
+
+    const end = new Date();
+    await writeSourceStats(source.id, begin, end, (posts || []).length, true, null);
   } catch (e) {
     console.error(e);
 
-    await unlockSite(source.id, false);
+    await unlockSite(source.id);
+
+    const end = new Date();
+    await writeSourceStats(source.id, begin, end, null, false, e);
   }
 }
 
@@ -148,7 +160,7 @@ async function parserLoop() {
 async function unlockAllSources() {
   await connectToMysql();
 
-  await mysqlConnection.execute('UPDATE source SET is_locked = 0');
+  await mysqlConnection.execute('UPDATE source SET is_locked = 0 WHERE is_enabled = 1');
 }
 
 async function main() {
