@@ -25,8 +25,8 @@ class YouTubeParser extends AbstractParser {
       + '&maxResults=50') || {};
 
     return [].filter
-      .call(data.items || [], video => new Date(video.snippet.publishedAt) > this.lastPostDate)
-      .map(video => ({
+      .call(data.items || [], (video) => new Date(video.snippet.publishedAt) > this.lastPostDate)
+      .map((video) => ({
         url: `https://www.youtube.com/watch?v=${video.id.videoId}`,
         title: video.snippet.title,
         description: video.snippet.description,

@@ -12,14 +12,14 @@ module.exports = () => {
   }
 
   const consoleLog = console.log;
-  console.log = m => consoleLog(`${(new Date()).toISOString()} ${m}`);
+  console.log = (m) => consoleLog(`${(new Date()).toISOString()} ${m}`);
 
   if (isDebug) {
     if (typeof (console.info) !== 'function') {
-      console.info = i => console.log(`[INFO]: ${i}`);
+      console.info = (i) => console.log(`[INFO]: ${i}`);
     } else {
       const consoleInfo = console.info;
-      console.info = i => consoleInfo(`${(new Date()).toISOString()} [INFO]: ${i}`);
+      console.info = (i) => consoleInfo(`${(new Date()).toISOString()} [INFO]: ${i}`);
     }
   } else {
     console.info = () => {};
@@ -39,9 +39,9 @@ module.exports = () => {
   }
 
   if (typeof (console.warn) !== 'function') {
-    console.warn = w => console.log(`[WARN]: ${w}`);
+    console.warn = (w) => console.log(`[WARN]: ${w}`);
   } else {
     const consoleWarn = console.warn;
-    console.warn = w => consoleWarn(`${(new Date()).toISOString()} [WARN]: ${w}`);
+    console.warn = (w) => consoleWarn(`${(new Date()).toISOString()} [WARN]: ${w}`);
   }
 };

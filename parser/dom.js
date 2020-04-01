@@ -34,7 +34,7 @@ class DomParser extends AbstractParser {
     });
 
     const rawLinks = dom.window.document.querySelectorAll(this.settings.linksSelector) || [];
-    const links = [].map.call(rawLinks, link => link.href);
+    const links = [].map.call(rawLinks, (link) => link.href);
 
     const descriptions = this.settings.descriptionSelector
       ? dom.window.document.querySelectorAll(this.settings.descriptionSelector) || []
@@ -98,7 +98,7 @@ class DomParser extends AbstractParser {
   }
 
   async parseArticles(articles) {
-    return [].filter.call(articles || [], article => !!article)
+    return [].filter.call(articles || [], (article) => !!article)
       .map(async (article) => {
         const content = await this.getPage(article.url);
 

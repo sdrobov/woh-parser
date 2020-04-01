@@ -41,7 +41,7 @@ class Parser extends AbstractParser {
     const result = await parser.parse();
     const posts = await Promise.all(result);
 
-    return [].map.call(posts || [], post => this.preparePost(post));
+    return [].map.call(posts || [], (post) => this.preparePost(post));
   }
 
   preparePost(post) {

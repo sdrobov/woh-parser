@@ -9,8 +9,8 @@ class RssParser extends DomParser {
     const maxItems = this.settings.limitMax || items.length;
     const articles = [].slice
       .call(items || [], 0, maxItems)
-      .filter(item => !this.lastPostDate || new Date(item.pubdate) > this.lastPostDate)
-      .map(item => ({
+      .filter((item) => !this.lastPostDate || new Date(item.pubdate) > this.lastPostDate)
+      .map((item) => ({
         title: item.title,
         url: item.origlink || item.link,
         pubdate: item.pubdate,
