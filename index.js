@@ -63,12 +63,18 @@ async function savePost(post) {
  * @param {number} sourceId
  * @param {Date} begin
  * @param {Date} end
- * @param {number} parsed
+ * @param {number|null} parsed
  * @param {boolean} isSuccess
- * @param {string} error
+ * @param {string|null} error
  */
 async function writeSourceStats(sourceId, begin, end, parsed, isSuccess, error) {
-  return mysqlConnection.execute('INSERT INTO source_stat VALUES(?, ?, ?, ?, ?, ?)', [sourceId, begin, end, parsed, isSuccess, error]);
+  try {
+    await mysqlConnection.execute('INSERT INTO source_stat VALUES(?, ?, ?, ?, ?, ?)',
+      [sourceId, begin, end, parsed, isSuccess, error]);
+  } catch (e) {
+    console.error(e);
+    console.error(`sourceId: ${sourceId}; begin: ${begin}; end: ${end}; parsed: ${parsed}; isSuccess: ${isSuccess}; error: ${error}`);
+  }
 }
 
 async function parseSource(source) {
@@ -94,16 +100,12 @@ async function parseSource(source) {
 
     await updateLastPostDate(source.id, lastPostDate);
     await unlockSite(source.id);
-
-    const end = new Date();
-    await writeSourceStats(source.id, begin, end, (posts || []).length, true, null);
+    writeSourceStats(source.id, begin, new Date(), (posts || []).length, true, null);
   } catch (e) {
     console.error(e);
 
     await unlockSite(source.id);
-
-    const end = new Date();
-    await writeSourceStats(source.id, begin, end, null, false, e);
+    writeSourceStats(source.id, begin, new Date(), null, false, e);
   }
 }
 
