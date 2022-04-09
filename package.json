@@ -14,7 +14,7 @@
     "feedparser-promised": "^2.0.1",
     "js-beautify": "^1.11.0",
     "jsdom": "^13.2.0",
-    "moment": "^2.26.0",
+    "moment": "^2.29.2",
     "mysql2": "^1.7.0",
     "sanitize-html": "^2.3.2"
   },
